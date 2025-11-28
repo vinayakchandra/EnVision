@@ -1,237 +1,238 @@
 //
-//  UserProfileViewController.swift
+//  SettingsViewController.swift
 //  Envision
 //
-//  Created by admin55 on 13/11/25.
+//  Created by admin55 on 17/11/25.
 //
-
 
 import UIKit
 
 class ProfileViewController: UIViewController {
 
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+
+    // MARK: - Profile Components
+    private let profileHeaderView = UIView()
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
-    
+
     private let profileImageContainer = UIView()
     private let profileImageView = UIImageView()
     private let editImageButton = UIButton(type: .system)
-    
+
     private let nameLabel = UILabel()
     private let emailLabel = UILabel()
     private let editProfileButton = UIButton(type: .system)
-    
-    private let statsContainer = UIStackView()
-    
+
+    private let statsStackH = UIStackView()
+
+    // MARK: - Sections & Items
+    private enum Section: Int, CaseIterable {
+        case account
+        case preferences
+        case privacy
+        case about
+
+        var title: String {
+            switch self {
+            case .account: return "Account"
+            case .preferences: return "Preferences"
+            case .privacy: return "Privacy & Security"
+            case .about: return "About"
+            }
+        }
+    }
+
+    private let items: [Section: [(icon: String, title: String)]] = [
+        .account: [
+            ("person.crop.circle", "My Profile"),
+            ("envelope.fill", "Email & Password")
+        ],
+        .preferences: [
+            ("paintbrush.fill", "Appearance"),
+            ("bell.badge.fill", "Notifications"),
+            ("bookmark.fill", "Saved Items")
+        ],
+        .privacy: [
+            ("lock.fill", "Privacy Controls"),
+            ("hand.raised.fill", "Permissions"),
+            ("key.fill", "Security")
+        ],
+        .about: [
+            ("info.circle.fill", "App Info"),
+            ("doc.text.fill", "Terms of Service"),
+            ("shield.lefthalf.filled", "Privacy Policy")
+        ]
+    ]
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
         title = "Profile"
-        
-        setupScrollView()
-        setupProfileHeader()
-        setupStats()
-//        setupMenuItems()
-        setupMenuItems()
-        
-    }
-    
-    private func setupScrollView() {
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.axis = .vertical
-        contentView.spacing = 24
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-        
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
-        
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            scrollView.leftAnchor.constraint(equalTo: view.leftAnchor),
-            scrollView.rightAnchor.constraint(equalTo: view.rightAnchor),
+        navigationController?.navigationBar.prefersLargeTitles = true
+        view.backgroundColor = .systemBackground
 
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.leftAnchor.constraint(equalTo: scrollView.leftAnchor),
-            contentView.rightAnchor.constraint(equalTo: scrollView.rightAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+        setupTable()
+        setupProfileHeader()
+        tableView.tableHeaderView = profileHeaderView
+    }
+
+    // MARK: - Table Setup
+    private func setupTable() {
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        tableView.delegate = self
+        tableView.dataSource = self
+
+        tableView.register(ProfileCell.self, forCellReuseIdentifier: "SettingsCell")
+        
+        view.addSubview(tableView)
+
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.topAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
+
+    // MARK: - Profile Header Setup
     private func setupProfileHeader() {
+        profileHeaderView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 280)
+
         let container = UIStackView()
         container.axis = .vertical
         container.alignment = .center
         container.spacing = 16
         container.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Gradient circle
-        profileImageContainer.translatesAutoresizingMaskIntoConstraints = false
-        profileImageContainer.layer.cornerRadius = 60
-        profileImageContainer.clipsToBounds = true
-        
-        let gradient = CAGradientLayer()
-        gradient.colors = [UIColor.systemBlue.cgColor, UIColor.systemPurple.cgColor]
-        gradient.startPoint = CGPoint(x: 0, y: 0)
-        gradient.endPoint = CGPoint(x: 1, y: 1)
-        gradient.frame = CGRect(x: 0, y: 0, width: 120, height: 120)
-        profileImageContainer.layer.insertSublayer(gradient, at: 0)
-        
-        profileImageContainer.addSubview(profileImageView)
+        profileHeaderView.addSubview(container)
+
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: profileHeaderView.topAnchor, constant: 20),
+            container.leadingAnchor.constraint(equalTo: profileHeaderView.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: profileHeaderView.trailingAnchor)
+        ])
+
+        // MARK: - Profile Image (simple, no gradient, no camera button)
         profileImageView.translatesAutoresizingMaskIntoConstraints = false
-        profileImageView.image = UIImage(systemName: "person.fill")
-        profileImageView.tintColor = .white
-        profileImageView.contentMode = .scaleAspectFit
-        
+        profileImageView.image = UIImage(systemName: "person.crop.circle.fill")
+        profileImageView.tintColor = .systemGray4
+        profileImageView.contentMode = .scaleAspectFill
+        profileImageView.clipsToBounds = true
+        profileImageView.layer.cornerRadius = 60
+
+        container.addArrangedSubview(profileImageView)
+
         NSLayoutConstraint.activate([
-            profileImageContainer.widthAnchor.constraint(equalToConstant: 120),
-            profileImageContainer.heightAnchor.constraint(equalToConstant: 120),
-            
-            profileImageView.centerXAnchor.constraint(equalTo: profileImageContainer.centerXAnchor),
-            profileImageView.centerYAnchor.constraint(equalTo: profileImageContainer.centerYAnchor),
-            profileImageView.widthAnchor.constraint(equalToConstant: 50),
-            profileImageView.heightAnchor.constraint(equalToConstant: 50)
+            profileImageView.widthAnchor.constraint(equalToConstant: 120),
+            profileImageView.heightAnchor.constraint(equalToConstant: 120)
         ])
-        
-        // Camera button over image
-        editImageButton.setImage(UIImage(systemName: "camera.fill"), for: .normal)
-        editImageButton.tintColor = .white
-        editImageButton.backgroundColor = .systemBlue
-        editImageButton.layer.cornerRadius = 16
-        editImageButton.translatesAutoresizingMaskIntoConstraints = false
-        editImageButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
-        
-        profileImageContainer.addSubview(editImageButton)
-        NSLayoutConstraint.activate([
-            editImageButton.widthAnchor.constraint(equalToConstant: 32),
-            editImageButton.heightAnchor.constraint(equalToConstant: 32),
-            editImageButton.bottomAnchor.constraint(equalTo: profileImageContainer.bottomAnchor, constant: 4),
-            editImageButton.rightAnchor.constraint(equalTo: profileImageContainer.rightAnchor, constant: 4)
-        ])
-        
-        nameLabel.text = "John Doe"
-        nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
-        
-        emailLabel.text = "john.doe@example.com"
+
+        // MARK: - Name & Email
+        nameLabel.text = "Shaurya"
+        nameLabel.font = .boldSystemFont(ofSize: 22)
+
+        emailLabel.text = "shaurya@gmail.com"
         emailLabel.font = .systemFont(ofSize: 14)
         emailLabel.textColor = .secondaryLabel
-        
-        editProfileButton.setTitle("Edit Profile", for: .normal)
-        editProfileButton.backgroundColor = .systemBlue
-        editProfileButton.tintColor = .white
-        editProfileButton.layer.cornerRadius = 12
-        editProfileButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
-        editProfileButton.translatesAutoresizingMaskIntoConstraints = false
-        editProfileButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        editProfileButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
-        
-        container.addArrangedSubview(profileImageContainer)
+
         container.addArrangedSubview(nameLabel)
         container.addArrangedSubview(emailLabel)
+
+        // MARK: - Edit Profile Button
+        editProfileButton.setTitle("Edit Profile", for: .normal)
+        editProfileButton.backgroundColor = AppColors.accent
+        editProfileButton.tintColor = .white
+        editProfileButton.layer.cornerRadius = 10
+        editProfileButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
+        editProfileButton.translatesAutoresizingMaskIntoConstraints = false
+        editProfileButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
+
         container.addArrangedSubview(editProfileButton)
-        
-        contentView.addArrangedSubview(container)
-        container.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.9).isActive = true
-    }
-    private func setupStats() {
-        statsContainer.axis = .horizontal
-        statsContainer.distribution = .fillEqually
-        statsContainer.backgroundColor = UIColor.systemGray6
-        statsContainer.layer.cornerRadius = 12
-        statsContainer.translatesAutoresizingMaskIntoConstraints = false
-        
-        statsContainer.addArrangedSubview(makeStat(title: "Posts", value: "42"))
-        statsContainer.addArrangedSubview(makeDivider())
-        statsContainer.addArrangedSubview(makeStat(title: "Followers", value: "1.2K"))
-        statsContainer.addArrangedSubview(makeDivider())
-        statsContainer.addArrangedSubview(makeStat(title: "Following", value: "356"))
-        
-        contentView.addArrangedSubview(statsContainer)
-        statsContainer.heightAnchor.constraint(equalToConstant: 80).isActive = true
-        statsContainer.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.9).isActive = true
+
+        NSLayoutConstraint.activate([
+            editProfileButton.widthAnchor.constraint(equalToConstant: 200),
+            editProfileButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
     }
 
     private func makeStat(title: String, value: String) -> UIView {
-        let v = UIStackView()
-        v.axis = .vertical
-        v.alignment = .center
-        v.spacing = 4
-        
-        let val = UILabel()
-        val.text = value
-        val.font = .boldSystemFont(ofSize: 18)
-        
-        let lbl = UILabel()
-        lbl.text = title
-        lbl.font = .systemFont(ofSize: 12)
-        lbl.textColor = .secondaryLabel
-        
-        v.addArrangedSubview(val)
-        v.addArrangedSubview(lbl)
-        return v
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 3
+
+        let valLabel = UILabel()
+        valLabel.text = value
+        valLabel.font = .boldSystemFont(ofSize: 18)
+
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 12)
+        titleLabel.textColor = .secondaryLabel
+
+        stack.addArrangedSubview(valLabel)
+        stack.addArrangedSubview(titleLabel)
+
+        return stack
     }
 
     private func makeDivider() -> UIView {
-        let d = UIView()
-        d.backgroundColor = .systemGray3
-        d.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        return d
-    }
-    private func setupMenuItems() {
-        let menuStack = UIStackView()
-        menuStack.axis = .vertical
-        menuStack.spacing = 12
-        menuStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        menuStack.addArrangedSubview(menuItem(icon: "person.circle", title: "My Account"))
-        menuStack.addArrangedSubview(menuItem(icon: "heart.fill", title: "Favorites"))
-        menuStack.addArrangedSubview(menuItem(icon: "bookmark.fill", title: "Saved Items"))
-        menuStack.addArrangedSubview(menuItem(icon: "bell.fill", title: "Notifications"))
-        menuStack.addArrangedSubview(menuItem(icon: "lock.fill", title: "Privacy & Security"))
-        menuStack.addArrangedSubview(menuItem(icon: "gearshape.fill", title: "Settings"))
-        
-        contentView.addArrangedSubview(menuStack)
-        menuStack.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.9).isActive = true
+        let divider = UIView()
+        divider.backgroundColor = .systemGray6
+        divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        return divider
     }
 
-    private func menuItem(icon: String, title: String) -> UIView {
-        let button = UIButton(type: .system)
-        button.backgroundColor = UIColor.systemGray6
-        button.layer.cornerRadius = 12
-        button.setTitle(title, for: .normal)
-        button.contentHorizontalAlignment = .left
-        button.setTitleColor(.label, for: .normal)
-        
-        button.heightAnchor.constraint(equalToConstant: 56).isActive = true
-        
-        let iconView = UIImageView(image: UIImage(systemName: icon))
-        iconView.tintColor = .systemBlue
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        button.addSubview(iconView)
-        
-        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
-        chevron.tintColor = .secondaryLabel
-        chevron.translatesAutoresizingMaskIntoConstraints = false
-        button.addSubview(chevron)
-        
-        NSLayoutConstraint.activate([
-            iconView.leftAnchor.constraint(equalTo: button.leftAnchor, constant: 16),
-            iconView.centerYAnchor.constraint(equalTo: button.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 22),
-            iconView.heightAnchor.constraint(equalToConstant: 22),
-
-            chevron.rightAnchor.constraint(equalTo: button.rightAnchor, constant: -16),
-            chevron.centerYAnchor.constraint(equalTo: button.centerYAnchor),
-        ])
-        
-        return button
-    }
     @objc private func editProfileTapped() {
-        let vc = EditProfileViewController()
-        let nav = UINavigationController(rootViewController: vc)
+        let editProfileVC = EditProfileViewController()
+        let nav = UINavigationController(rootViewController: editProfileVC)
         nav.modalPresentationStyle = .formSheet
+
         present(nav, animated: true)
     }
 
 }
 
+// MARK: - TableView Delegates
+extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
+
+    func numberOfSections(in tableView: UITableView) -> Int {
+        return Section.allCases.count
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        let sec = Section(rawValue: section)!
+        return items[sec]?.count ?? 0
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        return Section(rawValue: section)?.title
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+
+        let section = Section(rawValue: indexPath.section)!
+        let item = items[section]![indexPath.row]
+
+        let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath) as! ProfileCell
+
+        cell.configure(icon: item.icon, title: item.title)
+        cell.accessoryType = .disclosureIndicator
+
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+
+        let section = Section(rawValue: indexPath.section)!
+        let item = items[section]![indexPath.row]
+
+        if section == .preferences && item.title == "Appearance" {
+            let vc = AppearanceViewController()
+            navigationController?.pushViewController(vc, animated: true)
+            return
+        }
+
+        print("Tapped:", item.title)
+    }
+}

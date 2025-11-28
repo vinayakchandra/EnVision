@@ -1,9 +1,11 @@
 import UIKit
 
 enum AppColors {
-    static let accent = UIColor(hex: "#4A90E2") // Blue accent
+//    static let accent = UIColor(hex: "#4A90E2") // Blue accent
+    static let accent = UIColor(hex: "#478F82") // green accent
     static let secondary = UIColor(hex: "#8B6F47") // Brown
-    static let background = UIColor(hex: "#FFFFFF") // Pure white
+//    static let background = UIColor(hex: "#FFFFFF")  // Pure white
+    static let background: UIColor = .systemBackground
     static let backgroundSecondary = UIColor(hex: "#F8F9FA") // Off-white
     static let textPrimary = UIColor(hex: "#2C3E50") // Dark blue-gray
     static let textSecondary = UIColor(hex: "#7F8C8D") // Gray

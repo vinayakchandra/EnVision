@@ -9,19 +9,20 @@ final class MainTabBarController: UITabBarController {
     }
 
     private func setupTabs() {
-        let home = UINavigationController(rootViewController: RoomsViewController())
+//        let home = UINavigationController(rootViewController: RoomsViewController())
+        let home = UINavigationController(rootViewController: MyRoomsViewController())
         home.tabBarItem = UITabBarItem(title: "Home", image: UIImage(systemName: "house"), selectedImage: UIImage(systemName: "house.fill"))
 
         let scan = UINavigationController(rootViewController: ScanFurnitureViewController())
-        scan.tabBarItem = UITabBarItem(title: "Scan", image: UIImage(systemName: "camera.viewfinder"), selectedImage: UIImage(systemName: "camera.viewfinder"))
+        scan.tabBarItem = UITabBarItem(title: "Scan Furniture", image: UIImage(systemName: "camera.viewfinder"), selectedImage: UIImage(systemName: "camera.viewfinder"))
 
-        let shop = UINavigationController(rootViewController: ShopViewController())
-        shop.tabBarItem = UITabBarItem(title: "Shop", image: UIImage(systemName: "bag"), selectedImage: UIImage(systemName: "bag.fill"))
+//        let shop = UINavigationController(rootViewController: ShopViewController())
+//        shop.tabBarItem = UITabBarItem(title: "Shop", image: UIImage(systemName: "bag"), selectedImage: UIImage(systemName: "bag.fill"))
 
         let profile = UINavigationController(rootViewController: ProfileViewController())
         profile.tabBarItem = UITabBarItem(title: "Profile", image: UIImage(systemName: "person"), selectedImage: UIImage(systemName: "person.fill"))
 
-        viewControllers = [home, scan, shop, profile]
+        viewControllers = [home, scan, profile]
         tabBar.tintColor = AppColors.accent
     }
 
