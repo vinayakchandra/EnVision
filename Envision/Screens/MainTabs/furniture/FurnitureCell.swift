@@ -79,7 +79,7 @@ final class FurnitureCell: UICollectionViewCell {
     
     private let placeholderIcon: UIImageView = {
         let iv = UIImageView()
-        iv.image = UIImage(systemName: "cube.fill")
+        iv.image = UIImage(systemName: "arkit")
         iv.tintColor = .systemGray3
         iv.contentMode = .scaleAspectFit
         iv.translatesAutoresizingMaskIntoConstraints = false
