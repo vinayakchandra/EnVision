@@ -62,6 +62,12 @@ final class RoomCell: UICollectionViewCell {
         container.addSubview(titleLabel)
         container.addSubview(sizeLabel)
 
+        contentView.backgroundColor = .clear
+        contentView.layer.shadowColor = UIColor.black.cgColor
+        contentView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        contentView.layer.shadowRadius = 4
+        contentView.layer.shadowOpacity = 0.1
+
         NSLayoutConstraint.activate([
             container.topAnchor.constraint(equalTo: contentView.topAnchor),
             container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -97,7 +103,7 @@ final class RoomCell: UICollectionViewCell {
     func configure(fileName: String, size: String, thumbnail: UIImage?) {
         titleLabel.text = fileName
         sizeLabel.text = size
-        thumbnailView.image = thumbnail ?? UIImage(systemName: "cube")!
+        thumbnailView.image = thumbnail ?? UIImage(systemName: "arkit")!
     }
 
     /// Use this version if you're working with RoomModel directly
