@@ -70,7 +70,7 @@ class OnboardingController: UIViewController, UIPageViewControllerDataSource, UI
             OnboardingPage(
                 title: "Visualize with Confidence",
                 subtitle: "See how items fit before you buy.",
-                systemImage: "cube.box.fill"
+                systemImage: "arkit"
             )
         ]
     }
