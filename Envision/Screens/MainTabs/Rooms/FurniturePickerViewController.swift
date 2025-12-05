@@ -53,7 +53,7 @@ final class FurniturePickerViewController: UIViewController {
     private func modelsFolderURL() -> URL {
         let fm = FileManager.default
         let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let models = docs.appendingPathComponent("3D Models", isDirectory: true)
+        let models = docs.appendingPathComponent("furniture", isDirectory: true)
         if !fm.fileExists(atPath: models.path) {
             try? fm.createDirectory(at: models, withIntermediateDirectories: true)
         }
