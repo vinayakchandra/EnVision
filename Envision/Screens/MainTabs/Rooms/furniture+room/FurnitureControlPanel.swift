@@ -195,8 +195,8 @@ final class FurnitureControlPanel: UIView {
 
     private func setupScaleButtons() {
 
-        let plus = makeButton("➕", action: #selector(scaleUp))
-        let minus = makeButton("➖", action: #selector(scaleDown))
+        let plus = makeButton("plus", action: #selector(scaleUp))
+        let minus = makeButton("minus", action: #selector(scaleDown))
 
         let stack = UIStackView(arrangedSubviews: [minus, plus])
         stack.axis = .horizontal
@@ -214,10 +214,13 @@ final class FurnitureControlPanel: UIView {
                                     ])
     }
 
-    private func makeButton(_ text: String, action: Selector) -> UIButton {
+    private func makeButton(_ symbolName: String, action: Selector) -> UIButton {
         let b = UIButton(type: .system)
-        b.setTitle(text, for: .normal)
-        b.titleLabel?.font = UIFont.systemFont(ofSize: 32, weight: .medium)
+
+        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .bold)
+        let image = UIImage(systemName: symbolName, withConfiguration: config)
+
+        b.setImage(image, for: .normal)
         b.tintColor = .white
         b.backgroundColor = UIColor.white.withAlphaComponent(0.15)
         b.layer.cornerRadius = 10
