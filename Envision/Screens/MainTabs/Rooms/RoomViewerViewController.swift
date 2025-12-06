@@ -229,7 +229,7 @@ final class RoomViewerViewController: UIViewController {
                 return
             }
 
-            model.scale = [0.5, 0.5, 0.5]
+            model.scale = [0.1, 0.1, 0.1]
             model.position = [0, 0, 0]
             model.generateCollisionShapes(recursive: true)
 
