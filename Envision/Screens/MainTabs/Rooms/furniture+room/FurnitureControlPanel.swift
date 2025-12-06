@@ -42,7 +42,7 @@ final class FurnitureControlPanel: UIView {
     // ---------------------------------------------------------
 
     private func setupUI() {
-        backgroundColor = UIColor.black.withAlphaComponent(0.25)
+        // backgroundColor = UIColor.black.withAlphaComponent(0.25)
         translatesAutoresizingMaskIntoConstraints = false
 
         setupJoystick()
@@ -68,8 +68,8 @@ final class FurnitureControlPanel: UIView {
         addSubview(joystickKnob)
 
         NSLayoutConstraint.activate([
-                                        joystickBase.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 10),
-                                        joystickBase.centerXAnchor.constraint(equalTo: centerXAnchor),
+                                        joystickBase.centerYAnchor.constraint(equalTo: centerYAnchor),
+                                        joystickBase.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
                                         joystickBase.widthAnchor.constraint(equalToConstant: joystickSize),
                                         joystickBase.heightAnchor.constraint(equalToConstant: joystickSize),
 
@@ -128,9 +128,9 @@ final class FurnitureControlPanel: UIView {
         addSubview(heightSlider)
 
         NSLayoutConstraint.activate([
-                                        heightSlider.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 30),
-                                        heightSlider.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -30),
-                                        heightSlider.topAnchor.constraint(equalTo: joystickBase.bottomAnchor, constant: 25)
+                                        heightSlider.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+                                        heightSlider.trailingAnchor.constraint(equalTo: joystickBase.leadingAnchor, constant: -30),
+                                        heightSlider.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 10)
                                     ])
     }
 
@@ -152,9 +152,9 @@ final class FurnitureControlPanel: UIView {
         addSubview(rotationSlider)
 
         NSLayoutConstraint.activate([
-                                        rotationSlider.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 30),
-                                        rotationSlider.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -30),
-                                        rotationSlider.topAnchor.constraint(equalTo: heightSlider.bottomAnchor, constant: 15)
+                                        rotationSlider.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+                                        rotationSlider.trailingAnchor.constraint(equalTo: heightSlider.trailingAnchor),
+                                        rotationSlider.topAnchor.constraint(equalTo: heightSlider.bottomAnchor, constant: 18)
                                     ])
     }
 
@@ -206,11 +206,10 @@ final class FurnitureControlPanel: UIView {
         addSubview(stack)
 
         NSLayoutConstraint.activate([
-                                        stack.centerXAnchor.constraint(equalTo: centerXAnchor),
-                                        stack.topAnchor.constraint(equalTo: rotationSlider.bottomAnchor, constant: 25),
+                                        stack.leadingAnchor.constraint(equalTo: heightSlider.leadingAnchor),
+                                        stack.topAnchor.constraint(equalTo: rotationSlider.bottomAnchor, constant: 10),
                                         stack.widthAnchor.constraint(equalToConstant: 200),
-                                        stack.heightAnchor.constraint(equalToConstant: 50),
-                                        stack.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -15)
+                                        stack.heightAnchor.constraint(equalToConstant: 50)
                                     ])
     }
 

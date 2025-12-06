@@ -250,7 +250,7 @@ final class RoomViewerViewController: UIViewController {
 
         let panel = FurnitureControlPanel()
         panel.translatesAutoresizingMaskIntoConstraints = false
-        panel.backgroundColor = UIColor.black.withAlphaComponent(0.25)
+        // panel.backgroundColor = UIColor.black.withAlphaComponent(0.25)
         panel.attach(to: model)
 
         view.addSubview(panel)
@@ -260,7 +260,7 @@ final class RoomViewerViewController: UIViewController {
             panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            panel.heightAnchor.constraint(equalToConstant: 330)
+            panel.heightAnchor.constraint(equalToConstant: 170)
         ])
     }
 
