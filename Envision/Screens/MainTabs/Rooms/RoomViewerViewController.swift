@@ -27,6 +27,7 @@ final class RoomViewerViewController: UIViewController {
     private var cameraPitch: Float = .pi / 6
     private var cameraYaw: Float = .pi / 4
     private var cameraDistance: Float = 1.5
+    private var controlPanel: FurnitureControlPanel?
 
     // UI
     private let modeToggle = UISegmentedControl(items: ["AR", "Object"])
@@ -44,10 +45,14 @@ final class RoomViewerViewController: UIViewController {
         self.viewerMode = mode
         super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError("init coder") }
+
+    required init?(coder: NSCoder) {
+        fatalError("init coder")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        title = "Room Viewer"
         setupLayout()
         setupUI()
         loadRoom()
@@ -105,17 +110,23 @@ final class RoomViewerViewController: UIViewController {
     // MARK: - Load Model
     private func loadRoom() {
         Task {
-            guard let model = try? await ModelEntity(contentsOf: roomURL) else { return }
+            guard let model = try? await ModelEntity(contentsOf: roomURL) else {
+                return
+            }
             model.generateCollisionShapes(recursive: true)
             roomModel = model
 
-            if viewerMode == .object { setupObjectScene() }
+            if viewerMode == .object {
+                setupObjectScene()
+            }
         }
     }
 
     // MARK: - Object Viewer Mode
     private func setupObjectScene() {
-        guard let roomModel else { return }
+        guard let roomModel else {
+            return
+        }
 
         objectView.scene.anchors.removeAll()
 
@@ -133,7 +144,9 @@ final class RoomViewerViewController: UIViewController {
     private func fitToScreen(_ model: ModelEntity) {
         let bounds = model.visualBounds(relativeTo: nil)
         let maxDim = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
-        guard maxDim > 0 else { return }
+        guard maxDim > 0 else {
+            return
+        }
         model.scale = SIMD3(repeating: 0.6 / maxDim)
     }
 
@@ -150,7 +163,9 @@ final class RoomViewerViewController: UIViewController {
     }
 
     private func enableOrbitGestures() {
-        objectView.gestureRecognizers?.forEach { objectView.removeGestureRecognizer($0) }
+        objectView.gestureRecognizers?.forEach {
+            objectView.removeGestureRecognizer($0)
+        }
         objectView.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(pan)))
         objectView.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch)))
     }
@@ -164,7 +179,7 @@ final class RoomViewerViewController: UIViewController {
     }
 
     @objc private func pinch(_ g: UIPinchGestureRecognizer) {
-        cameraDistance = max(0.3, min(8, cameraDistance * Float(1/g.scale)))
+        cameraDistance = max(0.3, min(8, cameraDistance * Float(1 / g.scale)))
         g.scale = 1
         updateCamera()
     }
@@ -192,39 +207,62 @@ final class RoomViewerViewController: UIViewController {
         }
     }
 
-   // MARK: - Furniture
-   @objc private func addFurnitureTapped() {
-       let picker = FurniturePickerViewController()
-       picker.onModelSelected = { [weak self] url in
-           self?.insertFurniture(url: url)
-       }
-       present(UINavigationController(rootViewController: picker), animated: true)
-   }
+    // MARK: - Furniture
+    @objc private func addFurnitureTapped() {
+        let picker = FurniturePickerViewController()
+        picker.onModelSelected = { [weak self] url in
+            self?.insertFurniture(url: url)
+        }
+        present(UINavigationController(rootViewController: picker), animated: true)
+    }
+
     // MARK: - Gestures
     private func addGestures(to entity: ModelEntity, in view: ARView) {
         entity.generateCollisionShapes(recursive: true)
         // view.installGestures([.translation, .rotation, .scale], for: entity)
         view.installGestures([.rotation, .scale], for: entity)
     }
-   private func insertFurniture(url: URL) {
-       Task {
-           guard let model = try? await ModelEntity(contentsOf: url) else {
-               return
-           }
-           model.scale = [0.5, 0.5, 0.5]
-           model.generateCollisionShapes(recursive: true)
 
-           let view = (viewerMode == .ar) ? objectView : objectView
-           let anchor = viewerMode == .ar ? AnchorEntity(plane: .horizontal) : AnchorEntity(world: .zero)
+    private func insertFurniture(url: URL) {
+        Task {
+            guard let model = try? await ModelEntity(contentsOf: url) else {
+                return
+            }
 
-           model.position = viewerMode == .ar ? [0, 0, -0.6] : [0, 0, 0]
+            model.scale = [0.5, 0.5, 0.5]
+            model.position = [0, 0, 0]
+            model.generateCollisionShapes(recursive: true)
 
-           anchor.addChild(model)
-           view.scene.addAnchor(anchor)
+            let anchor = AnchorEntity(world: .zero)
+            anchor.addChild(model)
+            objectView.scene.addAnchor(anchor)
 
-           placedFurniture.append(model)
-           addGestures(to: model, in: view)
-       }
-   }
+            placedFurniture.append(model)
+
+            DispatchQueue.main.async {
+                self.showControls(for: model)
+            }
+        }
+    }
+
+    private func showControls(for model: ModelEntity) {
+        controlPanel?.removeFromSuperview()
+
+        let panel = FurnitureControlPanel()
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        panel.backgroundColor = UIColor.black.withAlphaComponent(0.25)
+        panel.attach(to: model)
+
+        view.addSubview(panel)
+        controlPanel = panel
+
+        NSLayoutConstraint.activate([
+            panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            panel.heightAnchor.constraint(equalToConstant: 330)
+        ])
+    }
+
 
 }
