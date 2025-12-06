@@ -111,6 +111,7 @@ final class LoginViewController: UIViewController {
          forgotPasswordButton, createAccountButton, appleButton, googleButton
         ].forEach { contentView.addSubview($0) }
 
+        appleButton.tintColor = .black
         NSLayoutConstraint.activate([
             logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
             logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
