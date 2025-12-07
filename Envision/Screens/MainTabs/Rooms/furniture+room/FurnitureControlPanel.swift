@@ -105,8 +105,8 @@ final class FurnitureControlPanel: UIView {
             y: joystickBase.center.y + dy
         )
 
-        currentPosition.x += Float(dx / radius) * 0.01
-        currentPosition.z += Float(dy / radius) * 0.01
+        currentPosition.x += Float(dx / radius) * 0.005
+        currentPosition.z += Float(dy / radius) * 0.005
         entity.position = currentPosition
 
         if gesture.state == .ended {
