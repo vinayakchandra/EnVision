@@ -94,17 +94,15 @@ final class RoomViewerViewController: UIViewController {
         modeToggle.addTarget(self, action: #selector(toggleChanged), for: .valueChanged)
         navigationItem.titleView = modeToggle
 
-        // 🟦 Add the button to the view
-        view.addSubview(addFurnitureButton)
-        addFurnitureButton.addTarget(self, action: #selector(addFurnitureTapped), for: .touchUpInside)
-
-        NSLayoutConstraint.activate([
-                                        addFurnitureButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-                                        addFurnitureButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-                                        addFurnitureButton.widthAnchor.constraint(equalToConstant: 54),
-                                        addFurnitureButton.heightAnchor.constraint(equalToConstant: 54)
-                                    ])
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "plus"),
+            style: .plain,
+            target: self,
+            action: #selector(addFurnitureTapped)
+        )
+        navigationItem.rightBarButtonItem?.tintColor = .systemGreen
     }
+
 
 
     // MARK: - Load Model
