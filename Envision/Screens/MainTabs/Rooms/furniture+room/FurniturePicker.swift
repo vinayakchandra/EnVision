@@ -7,7 +7,7 @@ import UIKit
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
 
-final class FurniturePickerViewController: UIViewController {
+final class FurniturePicker: UIViewController {
 
     // MARK: - Public callback
 
@@ -227,7 +227,7 @@ final class FurniturePickerViewController: UIViewController {
 
 // MARK: - CollectionView
 
-extension FurniturePickerViewController: UICollectionViewDataSource, UICollectionViewDelegate {
+extension FurniturePicker: UICollectionViewDataSource, UICollectionViewDelegate {
 
     func collectionView(_ collectionView: UICollectionView,
                         numberOfItemsInSection section: Int) -> Int {
