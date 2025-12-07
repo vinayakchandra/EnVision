@@ -207,7 +207,7 @@ final class RoomViewerViewController: UIViewController {
 
     // MARK: - Furniture
     @objc private func addFurnitureTapped() {
-        let picker = FurniturePickerViewController()
+        let picker = FurniturePicker()
         picker.onModelSelected = { [weak self] url in
             self?.insertFurniture(url: url)
         }
