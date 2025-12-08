@@ -32,6 +32,7 @@ final class MyRoomsViewController: UIViewController {
     }
     private var selectedCategory: RoomCategory? = nil
     private let thumbnailCache: NSCache<NSURL, UIImage> = .init()
+    private var refreshControl: UIRefreshControl! // refresh
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -42,8 +43,19 @@ final class MyRoomsViewController: UIViewController {
         setupNavigationBar()
         setupSearch()
         setupCollectionView()
+        setupRefreshControl()
         setupLoadingOverlay()
 
+        loadRoomFiles(from: roomsFolderURL())
+    }
+
+    private func setupRefreshControl() {
+        refreshControl = UIRefreshControl()
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+        collectionView.refreshControl = refreshControl
+    }
+
+    @objc private func handleRefresh() {
         loadRoomFiles(from: roomsFolderURL())
     }
 
@@ -489,7 +501,10 @@ final class MyRoomsViewController: UIViewController {
 
     // MARK: - Load Files
     private func loadRoomFiles(from folder: URL) {
-        showLoading("Loading rooms…")
+        // Only show loading overlay if not triggered by pull-to-refresh
+        if refreshControl == nil || !refreshControl.isRefreshing {
+            showLoading("Loading rooms…")
+        }
 
         DispatchQueue.global(qos: .userInitiated).async {
             let fm = FileManager.default
@@ -511,6 +526,11 @@ final class MyRoomsViewController: UIViewController {
                 self.thumbnailCache.removeAllObjects()
                 self.collectionView.reloadData()
                 self.hideLoading()
+
+                // End refreshing animation
+                if self.refreshControl.isRefreshing {
+                    self.refreshControl.endRefreshing()
+                }
             }
         }
     }
