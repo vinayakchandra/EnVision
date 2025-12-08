@@ -195,8 +195,8 @@ final class FurnitureControlPanel: UIView {
 
     private func setupScaleButtons() {
 
-        let plus = makeButton("plus", action: #selector(scaleUp))
-        let minus = makeButton("minus", action: #selector(scaleDown))
+        let plus = makeButton("plus.magnifyingglass", action: #selector(scaleUp))
+        let minus = makeButton("minus.magnifyingglass", action: #selector(scaleDown))
 
         let stack = UIStackView(arrangedSubviews: [minus, plus])
         stack.axis = .horizontal
@@ -216,7 +216,7 @@ final class FurnitureControlPanel: UIView {
     private func makeButton(_ symbolName: String, action: Selector) -> UIButton {
         let b = UIButton(type: .system)
 
-        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .bold)
+        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
         let image = UIImage(systemName: symbolName, withConfiguration: config)
 
         b.setImage(image, for: .normal)
