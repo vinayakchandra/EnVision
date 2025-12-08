@@ -25,7 +25,7 @@ final class ScanFurnitureViewController: UIViewController {
     // MARK: - Data
     private var furnitureFiles: [URL] = []
     private var filteredFiles: [URL] = []
-    
+
     private var isSearching: Bool {
         let text = searchController.searchBar.text ?? ""
         return searchController.isActive && !text.trimmingCharacters(in: .whitespaces).isEmpty
@@ -33,6 +33,7 @@ final class ScanFurnitureViewController: UIViewController {
 
     private var previewURL: URL?
     private let thumbnailCache: NSCache<NSURL, UIImage> = .init()
+    private var refreshControl: UIRefreshControl! // refresh
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -44,17 +45,29 @@ final class ScanFurnitureViewController: UIViewController {
         setupNavigationBar()
         setupSearchController()
         setupCollectionView()
+        setupRefreshControl()
         setupLoadingOverlay()
         setupEmptyState()
 
         loadFurnitureFiles(from: furnitureFolderURL())
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         // Reload when returning from capture
         loadFurnitureFiles(from: furnitureFolderURL())
     }
+
+    private func setupRefreshControl() {
+        refreshControl = UIRefreshControl()
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+        collectionView.refreshControl = refreshControl
+    }
+
+    @objc private func handleRefresh() {
+        loadFurnitureFiles(from: furnitureFolderURL())
+    }
+
 
     // MARK: - Navigation Bar
     private func setupNavigationBar() {
@@ -69,13 +82,13 @@ final class ScanFurnitureViewController: UIViewController {
                 self.createFromPhotosTapped()
             }
         ])
-        
+
         let scanBtn = UIBarButtonItem(
             image: UIImage(systemName: "camera.viewfinder"),
             menu: scanMenu
         )
         scanBtn.tintColor = .systemGreen
-        
+
         let importBtn = UIBarButtonItem(
             image: UIImage(systemName: "square.and.arrow.down"),
             style: .plain,
@@ -83,29 +96,29 @@ final class ScanFurnitureViewController: UIViewController {
             action: #selector(importUSDZTapped)
         )
         importBtn.tintColor = .systemBlue
-        
+
         navigationItem.rightBarButtonItems = [scanBtn, importBtn]
-        
+
         // Left button: Edit menu
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "ellipsis"),
             menu: makeMenu()
         )
     }
-    
+
     private func makeMenu() -> UIMenu {
         return UIMenu(children: [
             UIAction(title: "Select Multiple",
                      image: UIImage(systemName: "checkmark.circle")) { _ in
                 self.enableMultipleSelection()
             },
-            
+
             UIAction(title: "Delete All",
                      image: UIImage(systemName: "trash"),
                      attributes: .destructive) { _ in
                 self.confirmDeleteAll()
             },
-            
+
             UIAction(title: "Room Geometry Playground",
                      image: UIImage(systemName: "arkit")) { [weak self] _ in
                 self?.showARViewController()
@@ -116,74 +129,77 @@ final class ScanFurnitureViewController: UIViewController {
             }
         ])
     }
-    
+
     @objc private func showARViewController() {
         let arVC = VisualizeRoomViewController()
         navigationController?.pushViewController(arVC, animated: true)
-    }    
+    }
+
     @objc private func showRoomWithFurniture() {
         let arVC = RoomARWithFurnitureViewController()
         navigationController?.pushViewController(arVC, animated: true)
     }
-    
+
     // MARK: - Menu Actions
     @objc private func enableMultipleSelection() {
         collectionView.allowsMultipleSelection = true
-        
+
         let doneBtn = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(disableMultipleSelection))
         let deleteBtn = UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelectedModels))
         deleteBtn.tintColor = .systemRed
-        
+
         navigationItem.leftBarButtonItem = doneBtn
         navigationItem.rightBarButtonItems = [deleteBtn]
     }
-    
+
     @objc private func disableMultipleSelection() {
         collectionView.allowsMultipleSelection = false
-        
+
         // Deselect all
         if let selected = collectionView.indexPathsForSelectedItems {
             for indexPath in selected {
                 collectionView.deselectItem(at: indexPath, animated: true)
             }
         }
-        
+
         setupNavigationBar()
     }
-    
+
     @objc private func deleteSelectedModels() {
         guard let selected = collectionView.indexPathsForSelectedItems, !selected.isEmpty else {
             showToast(message: "No models selected")
             return
         }
-        
+
         let alert = UIAlertController(
             title: "Delete \(selected.count) Model(s)?",
             message: "This action cannot be undone.",
             preferredStyle: .alert
         )
-        
+
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
             self?.performDeleteSelected(selected)
         })
-        
+
         present(alert, animated: true)
     }
-    
+
     private func performDeleteSelected(_ indexPaths: [IndexPath]) {
-        let sortedPaths = indexPaths.sorted { $0.item > $1.item }
-        
+        let sortedPaths = indexPaths.sorted {
+            $0.item > $1.item
+        }
+
         for indexPath in sortedPaths {
             let url = modelURL(at: indexPath)
-            
+
             // Use SaveManager to properly delete with metadata and thumbnail
             SaveManager.shared.deleteModel(at: url) { success in
                 if success {
                     self.thumbnailCache.removeObject(forKey: url as NSURL)
                 }
             }
-            
+
             if isSearching {
                 if let masterIndex = furnitureFiles.firstIndex(of: url) {
                     furnitureFiles.remove(at: masterIndex)
@@ -193,38 +209,39 @@ final class ScanFurnitureViewController: UIViewController {
                 furnitureFiles.remove(at: indexPath.item)
             }
         }
-        
+
         collectionView.deleteItems(at: sortedPaths)
         disableMultipleSelection()
         showToast(message: "✓ Deleted \(sortedPaths.count) model(s)")
         updateEmptyState()
     }
-    
+
     private func confirmDeleteAll() {
         guard !furnitureFiles.isEmpty else {
             showToast(message: "No models to delete")
             return
         }
-        
+
         let alert = UIAlertController(
             title: "Delete All Models?",
             message: "This will permanently delete all \(furnitureFiles.count) furniture models.",
             preferredStyle: .alert
         )
-        
+
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Delete All", style: .destructive) { [weak self] _ in
             self?.performDeleteAll()
         })
-        
+
         present(alert, animated: true)
     }
-    
+
     private func performDeleteAll() {
         for url in furnitureFiles {
-            SaveManager.shared.deleteModel(at: url) { _ in }
+            SaveManager.shared.deleteModel(at: url) { _ in
+            }
         }
-        
+
         furnitureFiles.removeAll()
         filteredFiles.removeAll()
         thumbnailCache.removeAllObjects()
@@ -315,18 +332,18 @@ final class ScanFurnitureViewController: UIViewController {
         view.addSubview(loadingOverlay)
 
         NSLayoutConstraint.activate([
-            loadingOverlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingOverlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            loadingOverlay.widthAnchor.constraint(equalToConstant: 220),
-            loadingOverlay.heightAnchor.constraint(equalToConstant: 120),
+                                        loadingOverlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                        loadingOverlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                                        loadingOverlay.widthAnchor.constraint(equalToConstant: 220),
+                                        loadingOverlay.heightAnchor.constraint(equalToConstant: 120),
 
-            activityIndicator.topAnchor.constraint(equalTo: loadingOverlay.contentView.topAnchor, constant: 18),
-            activityIndicator.centerXAnchor.constraint(equalTo: loadingOverlay.contentView.centerXAnchor),
+                                        activityIndicator.topAnchor.constraint(equalTo: loadingOverlay.contentView.topAnchor, constant: 18),
+                                        activityIndicator.centerXAnchor.constraint(equalTo: loadingOverlay.contentView.centerXAnchor),
 
-            loadingLabel.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: 12),
-            loadingLabel.leadingAnchor.constraint(equalTo: loadingOverlay.contentView.leadingAnchor, constant: 12),
-            loadingLabel.trailingAnchor.constraint(equalTo: loadingOverlay.contentView.trailingAnchor, constant: -12)
-        ])
+                                        loadingLabel.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: 12),
+                                        loadingLabel.leadingAnchor.constraint(equalTo: loadingOverlay.contentView.leadingAnchor, constant: 12),
+                                        loadingLabel.trailingAnchor.constraint(equalTo: loadingOverlay.contentView.trailingAnchor, constant: -12)
+                                    ])
     }
 
     private func showLoading(message: String = "Loading…") {
@@ -351,20 +368,20 @@ final class ScanFurnitureViewController: UIViewController {
         emptyStateView = UIView()
         emptyStateView.translatesAutoresizingMaskIntoConstraints = false
         emptyStateView.isHidden = true
-        
+
         let iconView = UIImageView()
         iconView.image = UIImage(systemName: "cube")
         iconView.tintColor = .systemGray3
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
-        
+
         let titleLabel = UILabel()
         titleLabel.text = "No 3D Models Yet"
         titleLabel.font = .boldSystemFont(ofSize: 22)
         titleLabel.textColor = .label
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+
         let messageLabel = UILabel()
         messageLabel.text = "Tap the camera icon to scan furniture\nor import USDZ files"
         messageLabel.font = .systemFont(ofSize: 16)
@@ -372,41 +389,43 @@ final class ScanFurnitureViewController: UIViewController {
         messageLabel.textAlignment = .center
         messageLabel.numberOfLines = 0
         messageLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+
         emptyStateView.addSubview(iconView)
         emptyStateView.addSubview(titleLabel)
         emptyStateView.addSubview(messageLabel)
         view.addSubview(emptyStateView)
-        
+
         NSLayoutConstraint.activate([
-            emptyStateView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            emptyStateView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            emptyStateView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
-            emptyStateView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
-            
-            iconView.topAnchor.constraint(equalTo: emptyStateView.topAnchor),
-            iconView.centerXAnchor.constraint(equalTo: emptyStateView.centerXAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 80),
-            iconView.heightAnchor.constraint(equalToConstant: 80),
-            
-            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
-            titleLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
-            
-            messageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            messageLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
-            messageLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
-            messageLabel.bottomAnchor.constraint(equalTo: emptyStateView.bottomAnchor)
-        ])
+                                        emptyStateView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                        emptyStateView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                                        emptyStateView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+                                        emptyStateView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
+
+                                        iconView.topAnchor.constraint(equalTo: emptyStateView.topAnchor),
+                                        iconView.centerXAnchor.constraint(equalTo: emptyStateView.centerXAnchor),
+                                        iconView.widthAnchor.constraint(equalToConstant: 80),
+                                        iconView.heightAnchor.constraint(equalToConstant: 80),
+
+                                        titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 20),
+                                        titleLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
+                                        titleLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
+
+                                        messageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+                                        messageLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
+                                        messageLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
+                                        messageLabel.bottomAnchor.constraint(equalTo: emptyStateView.bottomAnchor)
+                                    ])
     }
-    
+
     private func updateEmptyState() {
         emptyStateView.isHidden = !furnitureFiles.isEmpty
     }
 
     // MARK: - Load Files
     private func loadFurnitureFiles(from folderURL: URL) {
-        showLoading(message: "Scanning models…")
+        if refreshControl == nil || !refreshControl.isRefreshing {
+            showLoading(message: "Scanning models…")
+        }
         DispatchQueue.global(qos: .userInitiated).async {
             var results: [URL] = []
             let fm = FileManager.default
@@ -428,12 +447,27 @@ final class ScanFurnitureViewController: UIViewController {
 
             DispatchQueue.main.async {
                 self.furnitureFiles = results
+
+                // IMPORTANT: Use reloadSections or reloadData without clearing cache
+                // The cache is now used in cellForItemAt, so it won't be empty
                 self.collectionView.reloadData()
+
                 self.hideLoading()
                 self.updateEmptyState()
+
+                // End refreshing animation
+                if self.refreshControl.isRefreshing {
+                    self.refreshControl.endRefreshing()
+                }
             }
         }
     }
+
+//  method to clear cache only when explicitly needed (e.g., Delete All):
+    private func clearThumbnailCache() {
+        thumbnailCache.removeAllObjects()
+    }
+
 
     // MARK: - Thumbnails
     private func generateThumbnail(for url: URL, completion: @escaping (UIImage?) -> Void) {
@@ -462,17 +496,17 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     // MARK: - Actions
-    
+
     private func automaticCaptureTapped() {
         let vc = ObjectScanViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
-    
+
     private func createFromPhotosTapped() {
         let vc = CreateModelViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
-    
+
     @objc private func importUSDZTapped() {
         var contentTypes: [UTType] = []
         if let usdzType = UTType(filenameExtension: "usdz") {
@@ -488,11 +522,11 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     // MARK: - Helpers
-    
+
     private func modelURL(at indexPath: IndexPath) -> URL {
         return isSearching ? filteredFiles[indexPath.item] : furnitureFiles[indexPath.item]
     }
-    
+
     private func fileSizeString(for url: URL) -> String {
         let fm = FileManager.default
         if let attrs = try? fm.attributesOfItem(atPath: url.path),
@@ -503,7 +537,7 @@ final class ScanFurnitureViewController: UIViewController {
         }
         return "--"
     }
-    
+
     private func fileDateString(for url: URL) -> String {
         let fm = FileManager.default
         if let attrs = try? fm.attributesOfItem(atPath: url.path),
@@ -515,34 +549,34 @@ final class ScanFurnitureViewController: UIViewController {
         }
         return "--"
     }
-    
+
     private func showToast(message: String) {
         let toast = UIView()
         toast.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.95)
         toast.layer.cornerRadius = 12
         toast.translatesAutoresizingMaskIntoConstraints = false
-        
+
         let label = UILabel()
         label.text = message
         label.textColor = .white
         label.font = .systemFont(ofSize: 15, weight: .semibold)
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
-        
+
         toast.addSubview(label)
         view.addSubview(toast)
-        
+
         NSLayoutConstraint.activate([
-            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            toast.heightAnchor.constraint(equalToConstant: 50),
-            
-            label.topAnchor.constraint(equalTo: toast.topAnchor, constant: 8),
-            label.bottomAnchor.constraint(equalTo: toast.bottomAnchor, constant: -8),
-            label.leadingAnchor.constraint(equalTo: toast.leadingAnchor, constant: 20),
-            label.trailingAnchor.constraint(equalTo: toast.trailingAnchor, constant: -20)
-        ])
-        
+                                        toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                        toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+                                        toast.heightAnchor.constraint(equalToConstant: 50),
+
+                                        label.topAnchor.constraint(equalTo: toast.topAnchor, constant: 8),
+                                        label.bottomAnchor.constraint(equalTo: toast.bottomAnchor, constant: -8),
+                                        label.leadingAnchor.constraint(equalTo: toast.leadingAnchor, constant: 20),
+                                        label.trailingAnchor.constraint(equalTo: toast.trailingAnchor, constant: -20)
+                                    ])
+
         toast.alpha = 0
         UIView.animate(withDuration: 0.3) {
             toast.alpha = 1
@@ -571,17 +605,26 @@ extension ScanFurnitureViewController: UICollectionViewDataSource {
         let name = url.deletingPathExtension().lastPathComponent
         let sizeText = fileSizeString(for: url)
         let dateText = fileDateString(for: url)
-        cell.configure(name: name, sizeText: sizeText, dateText: dateText, thumbnail: nil)
 
-        // Generate thumbnail asynchronously
+        // Check cache first and use cached thumbnail immediately
+        if let cachedImage = thumbnailCache.object(forKey: url as NSURL) {
+            cell.configure(name: name, sizeText: sizeText, dateText: dateText, thumbnail: cachedImage)
+        } else {
+            cell.configure(name: name, sizeText: sizeText, dateText: dateText, thumbnail: nil)
+        }
+
+        // Always try to generate/refresh thumbnail asynchronously
         generateThumbnail(for: url) { image in
-            if let visibleCell = collectionView.cellForItem(at: indexPath) as? FurnitureCell {
+            // Only update if this cell is still visible and represents the same URL
+            if let visibleCell = collectionView.cellForItem(at: indexPath) as? FurnitureCell,
+               self.modelURL(at: indexPath) == url {
                 visibleCell.configure(name: name, sizeText: sizeText, dateText: dateText, thumbnail: image)
             }
         }
 
         return cell
     }
+
 }
 
 // MARK: - UICollectionViewDelegate
@@ -591,13 +634,14 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
             // In selection mode, just update UI
             return
         }
-        
+
         // Single tap - show QuickLook preview with AR option
         previewURL = modelURL(at: indexPath)
         let preview = QLPreviewController()
         preview.dataSource = self
         present(preview, animated: true)
     }
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let url = modelURL(at: indexPath)
         let arVC = MultiModelARViewController()
@@ -607,50 +651,52 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
         navigationController?.pushViewController(arVC, animated: true)
     }
 
-    
+
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let url = modelURL(at: indexPath)
-        
+
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
             let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { _ in
                 self.renameModel(at: indexPath, url: url)
             }
-            
+
             let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { _ in
                 self.shareModel(url: url)
             }
-            
+
             let delete = UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
                 self.deleteModel(at: indexPath, url: url)
             }
-            
+
             return UIMenu(children: [rename, share, delete])
         }
     }
-    
+
     private func renameModel(at indexPath: IndexPath, url: URL) {
         let alert = UIAlertController(title: "Rename Model", message: nil, preferredStyle: .alert)
         alert.addTextField { textField in
             textField.text = url.deletingPathExtension().lastPathComponent
             textField.placeholder = "Model name"
         }
-        
+
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
-            guard let newName = alert.textFields?.first?.text, !newName.isEmpty else { return }
+            guard let newName = alert.textFields?.first?.text, !newName.isEmpty else {
+                return
+            }
             self?.performRename(at: indexPath, url: url, newName: newName)
         })
-        
+
         present(alert, animated: true)
     }
-    
+
     private func performRename(at indexPath: IndexPath, url: URL, newName: String) {
         let fm = FileManager.default
         let newURL = url.deletingLastPathComponent().appendingPathComponent("\(newName).usdz")
-        
+
         do {
             try fm.moveItem(at: url, to: newURL)
-            
+
             if isSearching {
                 if let masterIndex = furnitureFiles.firstIndex(of: url) {
                     furnitureFiles[masterIndex] = newURL
@@ -659,14 +705,14 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
             } else {
                 furnitureFiles[indexPath.item] = newURL
             }
-            
+
             collectionView.reloadItems(at: [indexPath])
             showToast(message: "✓ Renamed to \(newName)")
         } catch {
             print("❌ Rename failed: \(error)")
         }
     }
-    
+
     private func shareModel(url: URL) {
         let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         if let popover = activityVC.popoverPresentationController {
@@ -675,22 +721,24 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
         }
         present(activityVC, animated: true)
     }
-    
+
     private func deleteModel(at indexPath: IndexPath, url: URL) {
         let alert = UIAlertController(
             title: "Delete Model?",
             message: "This action cannot be undone.",
             preferredStyle: .alert
         )
-        
+
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            guard let self = self else { return }
-            
+            guard let self = self else {
+                return
+            }
+
             SaveManager.shared.deleteModel(at: url) { success in
                 if success {
                     self.thumbnailCache.removeObject(forKey: url as NSURL)
-                    
+
                     if self.isSearching {
                         if let masterIndex = self.furnitureFiles.firstIndex(of: url) {
                             self.furnitureFiles.remove(at: masterIndex)
@@ -699,14 +747,14 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
                     } else {
                         self.furnitureFiles.remove(at: indexPath.item)
                     }
-                    
+
                     self.collectionView.deleteItems(at: [indexPath])
                     self.showToast(message: "✓ Model deleted")
                     self.updateEmptyState()
                 }
             }
         })
-        
+
         present(alert, animated: true)
     }
 }
@@ -718,7 +766,9 @@ extension ScanFurnitureViewController: UISearchResultsUpdating {
         if query.isEmpty {
             filteredFiles = []
         } else {
-            filteredFiles = furnitureFiles.filter { $0.lastPathComponent.localizedCaseInsensitiveContains(query) }
+            filteredFiles = furnitureFiles.filter {
+                $0.lastPathComponent.localizedCaseInsensitiveContains(query)
+            }
         }
         collectionView.reloadData()
     }
@@ -726,7 +776,10 @@ extension ScanFurnitureViewController: UISearchResultsUpdating {
 
 // MARK: - QLPreviewControllerDataSource
 extension ScanFurnitureViewController: QLPreviewControllerDataSource {
-    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+        1
+    }
+
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
         return previewURL! as QLPreviewItem
     }
@@ -735,39 +788,43 @@ extension ScanFurnitureViewController: QLPreviewControllerDataSource {
 // MARK: - UIDocumentPickerDelegate
 extension ScanFurnitureViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        let usdzURLs = urls.filter { $0.pathExtension.lowercased() == "usdz" }
-        guard !usdzURLs.isEmpty else { return }
-        
+        let usdzURLs = urls.filter {
+            $0.pathExtension.lowercased() == "usdz"
+        }
+        guard !usdzURLs.isEmpty else {
+            return
+        }
+
         showLoading(message: "Importing files…")
-        
+
         DispatchQueue.global(qos: .userInitiated).async {
             let destDir = self.furnitureFolderURL()
             let fm = FileManager.default
             var imported = 0
-            
+
             for url in usdzURLs {
                 var didStart = false
                 if url.startAccessingSecurityScopedResource() {
                     didStart = true
                 }
-                
+
                 let dest = destDir.appendingPathComponent(url.lastPathComponent)
                 if fm.fileExists(atPath: dest.path) {
                     try? fm.removeItem(at: dest)
                 }
-                
+
                 do {
                     try fm.copyItem(at: url, to: dest)
                     imported += 1
                 } catch {
                     print("❌ Import failed: \(error)")
                 }
-                
+
                 if didStart {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            
+
             DispatchQueue.main.async {
                 self.loadFurnitureFiles(from: destDir)
                 self.showToast(message: "✓ Imported \(imported) model(s)")
