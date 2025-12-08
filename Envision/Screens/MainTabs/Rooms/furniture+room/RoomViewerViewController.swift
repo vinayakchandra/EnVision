@@ -1,22 +1,14 @@
 import UIKit
 import RealityKit
 
-enum ViewerMode {
-    case object
-    case ar
-}
-
-// object view working
 final class RoomViewerViewController: UIViewController {
 
     // MARK: - Inputs
     private let roomURL: URL
-    private var viewerMode: ViewerMode
     private var placedFurniture: [ModelEntity] = []
 
     // MARK: - Views
-    private let objectView = ARView(frame: .zero)   // Only used as a 3D renderer
-    private let arScreen = UILabel()
+    private let objectView = ARView(frame: .zero)   // 3D renderer only
 
     // MARK: - State
     private var roomModel: ModelEntity?
@@ -29,20 +21,10 @@ final class RoomViewerViewController: UIViewController {
     private var cameraDistance: Float = 1.5
     private var controlPanel: FurnitureControlPanel?
 
-    // UI
-    private let modeToggle = UISegmentedControl(items: ["AR", "Object"])
-    private let addFurnitureButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
-        button.tintColor = .systemBlue
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }()
 
     // MARK: - Init
-    init(roomURL: URL, mode: ViewerMode = .object) {
+    init(roomURL: URL) {
         self.roomURL = roomURL
-        self.viewerMode = mode
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -53,6 +35,7 @@ final class RoomViewerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Room Viewer"
+        navigationController?.navigationBar.prefersLargeTitles = false
         setupLayout()
         setupUI()
         loadRoom()
@@ -61,49 +44,31 @@ final class RoomViewerViewController: UIViewController {
     // MARK: - Layout
     private func setupLayout() {
         objectView.translatesAutoresizingMaskIntoConstraints = false
-        objectView.cameraMode = .nonAR  // ❗ No AR mode, no camera
+        objectView.cameraMode = .nonAR    // No AR
 
-        arScreen.text = "AR SCREEN"
-        arScreen.textAlignment = .center
-        arScreen.backgroundColor = .gray
-        arScreen.textColor = .white
         objectView.environment.background = .color(.systemGray6)
-
-        arScreen.font = .boldSystemFont(ofSize: 30)
-        arScreen.translatesAutoresizingMaskIntoConstraints = false
-
         view.addSubview(objectView)
-        view.addSubview(arScreen)
 
         NSLayoutConstraint.activate([
                                         objectView.topAnchor.constraint(equalTo: view.topAnchor),
                                         objectView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                                         objectView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                                        objectView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-                                        arScreen.topAnchor.constraint(equalTo: view.topAnchor),
-                                        arScreen.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                                        arScreen.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                                        arScreen.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+                                        objectView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
                                     ])
     }
 
     // MARK: - UI
     private func setupUI() {
-        modeToggle.selectedSegmentIndex = viewerMode == .ar ? 1 : 0
-        modeToggle.addTarget(self, action: #selector(toggleChanged), for: .valueChanged)
-        navigationItem.titleView = modeToggle
-
+        // Remove segmented control entirely — nothing added to nav bar
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "plus"),
             style: .plain,
             target: self,
             action: #selector(addFurnitureTapped)
         )
+
         navigationItem.rightBarButtonItem?.tintColor = .systemGreen
     }
-
-
 
     // MARK: - Load Model
     private func loadRoom() {
@@ -111,12 +76,9 @@ final class RoomViewerViewController: UIViewController {
             guard let model = try? await ModelEntity(contentsOf: roomURL) else {
                 return
             }
-            model.generateCollisionShapes(recursive: true)
             roomModel = model
-
-            if viewerMode == .object {
-                setupObjectScene()
-            }
+            model.generateCollisionShapes(recursive: true)
+            setupObjectScene()
         }
     }
 
@@ -190,21 +152,6 @@ final class RoomViewerViewController: UIViewController {
         orbitCamera?.look(at: .zero, from: orbitCamera!.position, relativeTo: nil)
     }
 
-    // MARK: - Mode Change
-    @objc private func toggleChanged() {
-        viewerMode = modeToggle.selectedSegmentIndex == 0 ? .ar : .object
-        applyMode()
-    }
-
-    private func applyMode() {
-        objectView.isHidden = viewerMode == .ar
-        arScreen.isHidden = viewerMode == .object
-
-        if viewerMode == .object {
-            setupObjectScene()
-        }
-    }
-
     // MARK: - Furniture
     @objc private func addFurnitureTapped() {
         let picker = FurniturePicker()
@@ -212,13 +159,6 @@ final class RoomViewerViewController: UIViewController {
             self?.insertFurniture(url: url)
         }
         present(UINavigationController(rootViewController: picker), animated: true)
-    }
-
-    // MARK: - Gestures
-    private func addGestures(to entity: ModelEntity, in view: ARView) {
-        entity.generateCollisionShapes(recursive: true)
-        // view.installGestures([.translation, .rotation, .scale], for: entity)
-        view.installGestures([.rotation, .scale], for: entity)
     }
 
     private func insertFurniture(url: URL) {
@@ -248,19 +188,16 @@ final class RoomViewerViewController: UIViewController {
 
         let panel = FurnitureControlPanel()
         panel.translatesAutoresizingMaskIntoConstraints = false
-        // panel.backgroundColor = UIColor.black.withAlphaComponent(0.25)
         panel.attach(to: model)
 
         view.addSubview(panel)
         controlPanel = panel
 
         NSLayoutConstraint.activate([
-            panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            panel.heightAnchor.constraint(equalToConstant: 170)
-        ])
+                                        panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                                        panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                                        panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+                                        panel.heightAnchor.constraint(equalToConstant: 170)
+                                    ])
     }
-
-
 }

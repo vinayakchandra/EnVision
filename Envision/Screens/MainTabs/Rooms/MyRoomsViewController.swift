@@ -602,7 +602,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
 
         // Otherwise, open the room viewer
         let url = currentFile(at: indexPath)
-        let vc = RoomViewerViewController(roomURL: url, mode: .object)
+        let vc = RoomViewerViewController(roomURL: url)
         navigationController?.pushViewController(vc, animated: true)
     }
 

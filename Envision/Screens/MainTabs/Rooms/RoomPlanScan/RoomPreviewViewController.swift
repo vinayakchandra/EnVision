@@ -435,13 +435,13 @@ final class RoomPreviewViewController: UIViewController {
 
     @objc private func openObject3D() {
         guard let url = usdzURL else { return }
-        let vc = RoomViewerViewController(roomURL: url, mode: .object)
+        let vc = RoomViewerViewController(roomURL: url)
         navigationController?.pushViewController(vc, animated: true)
     }
 
     @objc private func openInAR() {
         guard let url = usdzURL else { return }
-        let vc = RoomViewerViewController(roomURL: url, mode: .ar)
+        let vc = RoomViewerViewController(roomURL: url)
         navigationController?.pushViewController(vc, animated: true)
     }
 
