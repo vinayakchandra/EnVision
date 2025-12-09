@@ -8,7 +8,6 @@ import RoomPlan
 import QuickLook
 import QuickLookThumbnailing
 import UniformTypeIdentifiers
-import QuickLook
 
 final class MyRoomsViewController: UIViewController {
 
@@ -17,36 +16,149 @@ final class MyRoomsViewController: UIViewController {
     private var loadingOverlay: UIVisualEffectView!
     private var activityIndicator: UIActivityIndicatorView!
     private var loadingLabel: UILabel!
-
     private let searchController = UISearchController(searchResultsController: nil)
+    private var refreshControl: UIRefreshControl!
     private var previewURL: URL!
-
 
     // MARK: - Data
     private var roomFiles: [URL] = []
-    private var filteredFiles: [URL] = []
+    private var selectedCategory: RoomCategory?
+    private var selectedRoomType: RoomType?
+    private let thumbnailCache = NSCache<NSURL, UIImage>()
 
     private var isSearching: Bool {
-        let t = searchController.searchBar.text ?? ""
-        return searchController.isActive && !t.trimmingCharacters(in: .whitespaces).isEmpty
+        guard let text = searchController.searchBar.text else { return false }
+        return searchController.isActive && !text.trimmingCharacters(in: .whitespaces).isEmpty
     }
-    private var selectedCategory: RoomCategory? = nil
-    private let thumbnailCache: NSCache<NSURL, UIImage> = .init()
-    private var refreshControl: UIRefreshControl! // refresh
+
+    private var displayFiles: [URL] {
+        var filtered = roomFiles
+
+        // Apply category filter
+        if let category = selectedCategory {
+            filtered = filtered.filter { loadMetadata(for: $0)?.category == category }
+        }
+
+        // Apply room type filter
+        if let roomType = selectedRoomType {
+            filtered = filtered.filter { loadMetadata(for: $0)?.roomType == roomType }
+        }
+
+        // Apply search filter
+        if isSearching, let searchText = searchController.searchBar.text?.trimmingCharacters(in: .whitespaces) {
+            filtered = filtered.filter { $0.lastPathComponent.localizedCaseInsensitiveContains(searchText) }
+        }
+
+        return filtered
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        setupUI()
+        loadRoomFiles()
+    }
 
+    private func setupUI() {
         title = "My Rooms"
         navigationController?.navigationBar.prefersLargeTitles = true
+        view.backgroundColor = .systemBackground
+
         setupNavigationBar()
         setupSearch()
         setupCollectionView()
         setupRefreshControl()
         setupLoadingOverlay()
+    }
 
-        loadRoomFiles(from: roomsFolderURL())
+    private func setupNavigationBar() {
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(image: UIImage(systemName: "camera.viewfinder"), style: .plain, target: self, action: #selector(scanTapped)),
+            UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"), style: .plain, target: self, action: #selector(importTapped))
+        ]
+
+        navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: makeMenu())
+    }
+
+    private func makeMenu() -> UIMenu {
+        UIMenu(children: [
+            UIAction(title: "Select Multiple", image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
+                self?.enableMultipleSelection()
+            },
+            UIAction(title: "Delete All", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+                self?.confirmDeleteAll()
+            },
+            UIAction(title: "Visualize furniture", image: UIImage(systemName: "arkit")) { [weak self] _ in
+                self?.showARViewController()
+            }
+        ])
+    }
+
+    private func setupSearch() {
+        searchController.searchResultsUpdater = self
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchBar.placeholder = "Search room models"
+        searchController.searchBar.autocapitalizationType = .none
+        navigationItem.searchController = searchController
+        navigationItem.hidesSearchBarWhenScrolling = true
+        definesPresentationContext = true
+    }
+
+    private func setupCollectionView() {
+        let layout = UICollectionViewCompositionalLayout { section, _ in
+            section == 0 ? self.makeChipsSection() : self.makeRoomsSection()
+        }
+
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.backgroundColor = .systemBackground
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        collectionView.register(ChipCell.self, forCellWithReuseIdentifier: ChipCell.reuseID)
+        collectionView.register(RoomCell.self, forCellWithReuseIdentifier: RoomCell.reuseID)
+        collectionView.delegate = self
+        collectionView.dataSource = self
+
+        view.addSubview(collectionView)
+        NSLayoutConstraint.activate([
+                                        collectionView.topAnchor.constraint(equalTo: view.topAnchor),
+                                        collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                                        collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                                        collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+                                    ])
+    }
+
+    private func makeChipsSection() -> NSCollectionLayoutSection {
+        let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
+            widthDimension: .estimated(100),
+            heightDimension: .absolute(32)
+        ))
+
+        let group = NSCollectionLayoutGroup.horizontal(
+            layoutSize: NSCollectionLayoutSize(widthDimension: .estimated(100), heightDimension: .absolute(32)),
+            subitems: [item]
+        )
+
+        let section = NSCollectionLayoutSection(group: group)
+        section.orthogonalScrollingBehavior = .continuous
+        section.interGroupSpacing = 8
+        section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        return section
+    }
+
+    private func makeRoomsSection() -> NSCollectionLayoutSection {
+        let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1.0),
+            heightDimension: .fractionalHeight(1.0)
+        ))
+        item.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
+
+        let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 1
+        let group = NSCollectionLayoutGroup.horizontal(
+            layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1.0), heightDimension: .absolute(200)),
+            subitem: item,
+            count: columns
+        )
+
+        return NSCollectionLayoutSection(group: group)
     }
 
     private func setupRefreshControl() {
@@ -55,380 +167,8 @@ final class MyRoomsViewController: UIViewController {
         collectionView.refreshControl = refreshControl
     }
 
-    @objc private func handleRefresh() {
-        loadRoomFiles(from: roomsFolderURL())
-    }
-
-    private func setupNavigationBar() {
-        let filterBtn = UIBarButtonItem(
-            image: UIImage(systemName: selectedCategory == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"),
-            style: .plain,
-            target: self,
-            action: #selector(filterTapped)
-        )
-        filterBtn.tintColor = selectedCategory == nil ? .systemIndigo : selectedCategory?.color
-
-        let importBtn = UIBarButtonItem(
-            image: UIImage(systemName: "square.and.arrow.down"),
-            style: .plain,
-            target: self,
-            action: #selector(importTapped)
-        )
-        importBtn.tintColor = .systemBlue
-
-        let scanBtn = UIBarButtonItem(
-            image: UIImage(systemName: "camera.viewfinder"),
-            style: .plain,
-            target: self,
-            action: #selector(scanTapped)
-        )
-        scanBtn.tintColor = .systemGreen
-
-
-        navigationItem.rightBarButtonItems = [
-            scanBtn,
-            importBtn,
-            filterBtn
-        ]
-
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "ellipsis"),
-            menu: makeMenu()
-        )
-    }
-
-    private func makeMenu() -> UIMenu {
-        return UIMenu(children: [
-            UIAction(title: "Select Multiple",
-                     image: UIImage(systemName: "checkmark.circle")) { _ in
-                self.enableMultipleSelection()
-            },
-
-            UIAction(title: "Delete All",
-                     image: UIImage(systemName: "trash"),
-                     attributes: .destructive) { _ in
-                self.confirmDeleteAll()
-            },
-            UIAction(title: "Visualize furniture",
-                     image: UIImage(systemName: "arkit")) { [weak self] _ in
-                self?.showARViewController()
-            },
-        ])
-    }
-    // MARK: - Filter Button Handler
-    @objc private func filterTapped() {
-        showCategoryFilterMenu()
-    }
-    private func showCategoryFilterMenu() {
-        let alert = UIAlertController(
-            title: "Filter by Category",
-            message: "Show rooms by category",
-            preferredStyle: .actionSheet
-        )
-
-        // Add "All Rooms" option
-        let allAction = UIAlertAction(
-            title: selectedCategory == nil ? "✓ All Rooms" : "All Rooms",
-            style: .default
-        ) { [weak self] _ in
-            self?.selectedCategory = nil
-            self?.setupNavigationBar()
-            self?.collectionView.reloadData()
-            self?.updateTitle()
-        }
-        alert.addAction(allAction)
-
-        // Add separator
-        //        alert.addAction(UIAlertAction(title: "", style: .default, handler: nil))
-
-        // Add category options with SF Symbols
-        for category in RoomCategory.allCases {
-            let isSelected = selectedCategory == category
-            let title = isSelected ? "✓ \(category.displayName)" : "   \(category.displayName)"
-
-            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.selectedCategory = category
-                self?.setupNavigationBar()
-                self?.collectionView.reloadData()
-                self?.updateTitle()
-            }
-
-            // Set image with SF Symbol and color
-            if let image = UIImage(systemName: category.sfSymbol)?.withTintColor(category.color, renderingMode: .alwaysOriginal) {
-                action.setValue(image, forKey: "image")
-            }
-
-            alert.addAction(action)
-        }
-
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        // For iPad
-        if let popover = alert.popoverPresentationController {
-            popover.barButtonItem = navigationItem.rightBarButtonItems?.last
-        }
-
-        present(alert, animated: true)
-    }
-    private func updateTitle() {
-        if let category = selectedCategory {
-            let count = displayFiles().count
-            title = "\(category.displayName) (\(count))"
-        } else {
-            title = "My Rooms"
-        }
-    }
-    // MARK: - Menu Actions
-
-    @objc private func enableMultipleSelection() {
-        collectionView.allowsMultipleSelection = true
-
-        // Update navigation bar to show selection mode
-        let doneBtn = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(disableMultipleSelection))
-        let deleteBtn = UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelectedRooms))
-        deleteBtn.tintColor = .systemRed
-
-        navigationItem.leftBarButtonItem = doneBtn
-        navigationItem.rightBarButtonItems = [deleteBtn]
-
-        // Show toast
-        showToast(message: "Tap rooms to select, then tap delete")
-    }
-
-    @objc private func disableMultipleSelection() {
-        collectionView.allowsMultipleSelection = false
-
-        // Deselect all
-        if let selected = collectionView.indexPathsForSelectedItems {
-            for indexPath in selected {
-                collectionView.deselectItem(at: indexPath, animated: true)
-            }
-        }
-
-        // Restore original navigation bar
-        setupNavigationBar()
-    }
-
-    @objc private func deleteSelectedRooms() {
-        guard let selectedIndexPaths = collectionView.indexPathsForSelectedItems, !selectedIndexPaths.isEmpty else {
-            showToast(message: "No rooms selected")
-            return
-        }
-
-        let alert = UIAlertController(
-            title: "Delete \(selectedIndexPaths.count) Room(s)?",
-            message: "This action cannot be undone.",
-            preferredStyle: .alert
-        )
-
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            self?.performDeleteSelectedRooms(at: selectedIndexPaths)
-        })
-
-        present(alert, animated: true)
-    }
-
-    private func performDeleteSelectedRooms(at indexPaths: [IndexPath]) {
-        let filesToDelete = indexPaths.map { displayFiles()[$0.row] }
-
-        var deletedCount = 0
-        for url in filesToDelete {
-            SaveManager.shared.deleteModel(at: url) { success in
-                if success {
-                    deletedCount += 1
-                }
-            }
-        }
-
-        // Reload after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.loadRoomFiles(from: self.roomsFolderURL())
-            self.disableMultipleSelection()
-            self.showToast(message: "Deleted \(deletedCount) room(s)")
-        }
-    }
-
-    @objc private func showARViewController() {
-        let arVC = RoomFurniture()
-        navigationController?.pushViewController(arVC, animated: true)
-    }
-    private func confirmDeleteAll() {
-        guard !roomFiles.isEmpty else {
-            showToast(message: "No rooms to delete")
-            return
-        }
-
-        let alert = UIAlertController(
-            title: "Delete All Rooms?",
-            message: "This will delete all \(roomFiles.count) rooms. This action cannot be undone.",
-            preferredStyle: .alert
-        )
-
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete All", style: .destructive) { [weak self] _ in
-            self?.performDeleteAll()
-        })
-
-        present(alert, animated: true)
-    }
-
-    private func performDeleteAll() {
-        var deletedCount = 0
-
-        for url in roomFiles {
-            SaveManager.shared.deleteModel(at: url) { success in
-                if success {
-                    deletedCount += 1
-                }
-            }
-        }
-
-        // Reload after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.loadRoomFiles(from: self.roomsFolderURL())
-            self.showToast(message: "Deleted all rooms")
-        }
-    }
-
-    private func showToast(message: String) {
-        let toast = UILabel()
-        toast.text = message
-        toast.font = AppFonts.medium(14)
-        toast.textColor = .white
-        toast.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-        toast.textAlignment = .center
-        toast.layer.cornerRadius = 20
-        toast.clipsToBounds = true
-        toast.translatesAutoresizingMaskIntoConstraints = false
-
-        view.addSubview(toast)
-        toast.alpha = 0
-
-        NSLayoutConstraint.activate([
-                                        toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                                        toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-                                        toast.heightAnchor.constraint(equalToConstant: 40),
-                                        toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 150),
-                                        toast.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 20),
-                                        toast.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -20)
-                                    ])
-
-        UIView.animate(withDuration: 0.3) {
-            toast.alpha = 1
-        } completion: { _ in
-            UIView.animate(withDuration: 0.3, delay: 2.0) {
-                toast.alpha = 0
-            } completion: { _ in
-                toast.removeFromSuperview()
-            }
-        }
-    }
-
-    private func displayFiles() -> [URL] {
-        return isSearching ? filteredFiles : roomFiles
-    }
-
-    // MARK: - Search
-    private func setupSearch() {
-        searchController.searchResultsUpdater = self
-        searchController.obscuresBackgroundDuringPresentation = false
-        searchController.searchBar.placeholder = "Search room models"
-        navigationItem.searchController = searchController
-        navigationItem.hidesSearchBarWhenScrolling = true
-        searchController.searchBar.autocapitalizationType = .none
-
-        definesPresentationContext = true
-    }
-
-    // MARK: - Rooms folder
-    private func roomsFolderURL() -> URL {
-        let fm = FileManager.default
-        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let folder = docs.appendingPathComponent("roomPlan", isDirectory: true)
-        if !fm.fileExists(atPath: folder.path) {
-            try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
-        }
-        return folder
-    }
-
-    // MARK: - Import Button Handler
-    @objc private func importTapped() {
-        let allowed: [UTType] = [.usdz, .item]
-
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: allowed, asCopy: true)
-        picker.allowsMultipleSelection = true
-        picker.delegate = self
-        present(picker, animated: true)
-    }
-
-    // MARK: - Scan Button Handler
-    @objc private func scanTapped() {
-        if RoomCaptureSession.isSupported {
-            let scanner = RoomPlanScannerViewController()
-            navigationController?.pushViewController(scanner, animated: true)
-        } else {
-            showRoomPlanNotSupportedAlert()
-        }
-    }
-
-    private func showRoomPlanNotSupportedAlert() {
-        let alert = UIAlertController(
-            title: "Not Supported",
-            message: "This device does not support RoomPlan scanning.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
-
-    // MARK: - Collection View
-    private func setupCollectionView() {
-        let layout = UICollectionViewCompositionalLayout { _, _ in
-            let item = NSCollectionLayoutItem(
-                layoutSize: NSCollectionLayoutSize(
-                    widthDimension: .fractionalWidth(1.0),
-                    heightDimension: .fractionalHeight(1.0)
-                )
-            )
-            item.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
-
-            let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 1
-            let group = NSCollectionLayoutGroup.horizontal(
-                layoutSize: NSCollectionLayoutSize(
-                    widthDimension: .fractionalWidth(1.0),
-                    heightDimension: .absolute(200)
-                ),
-                subitem: item,
-                count: columns
-            )
-
-            return NSCollectionLayoutSection(group: group)
-        }
-
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = .systemBackground
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
-
-        collectionView.register(RoomCell.self, forCellWithReuseIdentifier: RoomCell.reuseID)
-        collectionView.delegate = self
-        collectionView.dataSource = self
-
-        view.addSubview(collectionView)
-
-        NSLayoutConstraint.activate([
-                                        collectionView.topAnchor.constraint(equalTo: view.topAnchor),
-                                        collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                                        collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                                        collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-                                    ])
-
-    }
-
-    // MARK: - Loading Overlay
     private func setupLoadingOverlay() {
-        let blur = UIBlurEffect(style: .systemMaterial)
-        loadingOverlay = UIVisualEffectView(effect: blur)
+        loadingOverlay = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
         loadingOverlay.translatesAutoresizingMaskIntoConstraints = false
         loadingOverlay.layer.cornerRadius = 12
         loadingOverlay.clipsToBounds = true
@@ -451,87 +191,172 @@ final class MyRoomsViewController: UIViewController {
                                         loadingOverlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
                                         loadingOverlay.widthAnchor.constraint(equalToConstant: 220),
                                         loadingOverlay.heightAnchor.constraint(equalToConstant: 120),
-
                                         activityIndicator.topAnchor.constraint(equalTo: loadingOverlay.contentView.topAnchor, constant: 18),
                                         activityIndicator.centerXAnchor.constraint(equalTo: loadingOverlay.contentView.centerXAnchor),
-
                                         loadingLabel.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: 10),
                                         loadingLabel.leadingAnchor.constraint(equalTo: loadingOverlay.contentView.leadingAnchor, constant: 12),
-                                        loadingLabel.trailingAnchor.constraint(equalTo: loadingOverlay.contentView.trailingAnchor, constant: -12),
+                                        loadingLabel.trailingAnchor.constraint(equalTo: loadingOverlay.contentView.trailingAnchor, constant: -12)
                                     ])
     }
 
-    private func showLoading(_ msg: String) {
-        loadingLabel.text = msg
-        loadingOverlay.isHidden = false
-        activityIndicator.startAnimating()
+    // MARK: - Actions
+    @objc private func handleRefresh() {
+        loadRoomFiles()
     }
 
-    private func hideLoading() {
-        loadingOverlay.isHidden = true
-        activityIndicator.stopAnimating()
+    @objc private func importTapped() {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.usdz, .item], asCopy: true)
+        picker.allowsMultipleSelection = true
+        picker.delegate = self
+        present(picker, animated: true)
     }
 
-    // MARK: - Import Logic
-    private func importRoomFiles(_ urls: [URL]) {
-        showLoading("Importing…")
+    @objc private func scanTapped() {
+        guard RoomCaptureSession.isSupported else {
+            showAlert(title: "Not Supported", message: "This device does not support RoomPlan scanning.")
+            return
+        }
+        navigationController?.pushViewController(RoomPlanScannerViewController(), animated: true)
+    }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let fm = FileManager.default
-            let destDir = self.roomsFolderURL()
+    @objc private func chipTapped(_ sender: UIButton) {
+        guard let cell = sender.superview?.superview as? ChipCell,
+              let indexPath = collectionView.indexPath(for: cell) else { return }
 
-            for url in urls {
-                if url.startAccessingSecurityScopedResource() {
-                    defer { url.stopAccessingSecurityScopedResource() }
-                }
+        let chips = allChipsData
+        let chipData = chips[indexPath.item]
 
-                let dest = destDir.appendingPathComponent(url.lastPathComponent)
-                if fm.fileExists(atPath: dest.path) {
-                    try? fm.removeItem(at: dest)
-                }
+        // Determine if it's a category or room type chip
+        if let category = chipData.category {
+            selectedCategory = category
+        } else if let roomType = chipData.roomType {
+            selectedRoomType = roomType
+        } else {
+            // "All" chip - clear both filters
+            selectedCategory = nil
+            selectedRoomType = nil
+        }
 
-                try? fm.copyItem(at: url, to: dest)
-            }
+        collectionView.reloadData()
+        updateTitle()
+    }
 
-            DispatchQueue.main.async {
-                self.loadRoomFiles(from: destDir)
-            }
+    private func enableMultipleSelection() {
+        collectionView.allowsMultipleSelection = true
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(disableMultipleSelection))
+        navigationItem.rightBarButtonItems = [UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelectedRooms))]
+        showToast(message: "Tap rooms to select, then tap delete")
+    }
+
+    @objc private func disableMultipleSelection() {
+        collectionView.allowsMultipleSelection = false
+        collectionView.indexPathsForSelectedItems?.forEach { collectionView.deselectItem(at: $0, animated: true) }
+        setupNavigationBar()
+    }
+
+    @objc private func deleteSelectedRooms() {
+        guard let selected = collectionView.indexPathsForSelectedItems, !selected.isEmpty else {
+            showToast(message: "No rooms selected")
+            return
+        }
+
+        showConfirmation(title: "Delete \(selected.count) Room(s)?", message: "This action cannot be undone.") { [weak self] in
+            self?.performBatchDelete(selected.map { self?.displayFiles[$0.item] }.compactMap { $0 })
         }
     }
 
-    // MARK: - Load Files
-    private func loadRoomFiles(from folder: URL) {
-        // Only show loading overlay if not triggered by pull-to-refresh
-        if refreshControl == nil || !refreshControl.isRefreshing {
+    @objc private func showARViewController() {
+        navigationController?.pushViewController(RoomFurniture(), animated: true)
+    }
+
+    private func confirmDeleteAll() {
+        guard !roomFiles.isEmpty else {
+            showToast(message: "No rooms to delete")
+            return
+        }
+
+        showConfirmation(title: "Delete All Rooms?", message: "This will delete all \(roomFiles.count) rooms. This action cannot be undone.") { [weak self] in
+            self?.performBatchDelete(self?.roomFiles ?? [])
+        }
+    }
+
+    private func performBatchDelete(_ urls: [URL]) {
+        var count = 0
+        urls.forEach { url in
+            SaveManager.shared.deleteModel(at: url) { if $0 { count += 1 } }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.loadRoomFiles()
+            self?.disableMultipleSelection()
+            self?.showToast(message: "Deleted \(count) room(s)")
+        }
+    }
+
+    // MARK: - Data Management
+    private var roomsFolderURL: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let folder = docs.appendingPathComponent("roomPlan", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    private func loadRoomFiles() {
+        if !refreshControl.isRefreshing {
             showLoading("Loading rooms…")
         }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let fm = FileManager.default
-            var list: [URL] = []
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
 
-            if let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) {
-                for case let fileURL as URL in enumerator {
-                    let ext = fileURL.pathExtension.lowercased()
-                    if ["usdz"].contains(ext) {
-                        list.append(fileURL)
-                    }
-                }
-            }
-
-            list.sort { $0.lastPathComponent.lowercased() < $1.lastPathComponent.lowercased() }
+            let files = (try? FileManager.default.contentsOfDirectory(at: self.roomsFolderURL, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension.lowercased() == "usdz" }
+            .sorted { $0.lastPathComponent.lowercased() < $1.lastPathComponent.lowercased() } ?? []
 
             DispatchQueue.main.async {
-                self.roomFiles = list
+                self.roomFiles = files
                 self.thumbnailCache.removeAllObjects()
                 self.collectionView.reloadData()
                 self.hideLoading()
-
-                // End refreshing animation
-                if self.refreshControl.isRefreshing {
-                    self.refreshControl.endRefreshing()
-                }
+                self.refreshControl.endRefreshing()
             }
+        }
+    }
+
+    private func importRoomFiles(_ urls: [URL]) {
+        showLoading("Importing…")
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            urls.forEach { url in
+                url.startAccessingSecurityScopedResource()
+                defer { url.stopAccessingSecurityScopedResource() }
+
+                let dest = self.roomsFolderURL.appendingPathComponent(url.lastPathComponent)
+                try? FileManager.default.removeItem(at: dest)
+                try? FileManager.default.copyItem(at: url, to: dest)
+            }
+
+            DispatchQueue.main.async { self.loadRoomFiles() }
+        }
+    }
+
+    private func loadMetadata(for url: URL) -> RoomMetadata? {
+        let metaURL = url.deletingLastPathComponent()
+            .appendingPathComponent("\(url.deletingPathExtension().lastPathComponent)_meta.json")
+
+        guard let data = try? Data(contentsOf: metaURL) else { return nil }
+        return try? JSONDecoder().decode(RoomMetadata.self, from: data)
+    }
+
+    private func updateTitle() {
+        if let category = selectedCategory {
+            title = "\(category.displayName) (\(displayFiles.count))"
+        } else if let roomType = selectedRoomType {
+            title = "\(roomType.displayName) (\(displayFiles.count))"
+        } else {
+            title = "My Rooms"
         }
     }
 
@@ -549,292 +374,251 @@ final class MyRoomsViewController: UIViewController {
             representationTypes: .all
         )
 
-        QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { rep, _ in
+        QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
             DispatchQueue.main.async {
-                let img = rep?.uiImage
-                if let img = img {
-                    self.thumbnailCache.setObject(img, forKey: url as NSURL)
+                if let img = rep?.uiImage {
+                    self?.thumbnailCache.setObject(img, forKey: url as NSURL)
+                    completion(img)
+                } else {
+                    completion(nil)
                 }
-                completion(img)
             }
         }
     }
 
     private func fileSizeString(for url: URL) -> String {
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-           let size = attrs[.size] as? NSNumber {
-            let fmt = ByteCountFormatter()
-            fmt.countStyle = .file
-            return fmt.string(fromByteCount: size.int64Value)
-        }
-        return "--"
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? NSNumber else { return "--" }
+
+        let fmt = ByteCountFormatter()
+        fmt.countStyle = .file
+        return fmt.string(fromByteCount: size.int64Value)
     }
 
-    private func currentFile(at index: IndexPath) -> URL {
-        return isSearching ? filteredFiles[index.item] : roomFiles[index.item]
+    // MARK: - UI Helpers
+    private func showLoading(_ msg: String) {
+        loadingLabel.text = msg
+        loadingOverlay.isHidden = false
+        activityIndicator.startAnimating()
+    }
+
+    private func hideLoading() {
+        loadingOverlay.isHidden = true
+        activityIndicator.stopAnimating()
+    }
+
+    private func showToast(message: String) {
+        let toast = UILabel()
+        toast.text = message
+        toast.font = AppFonts.medium(14)
+        toast.textColor = .white
+        toast.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 20
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(toast)
+        toast.alpha = 0
+
+        NSLayoutConstraint.activate([
+                                        toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                        toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+                                        toast.heightAnchor.constraint(equalToConstant: 40),
+                                        toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 150)
+                                    ])
+
+        UIView.animate(withDuration: 0.3) {
+            toast.alpha = 1
+        } completion: { _ in
+            UIView.animate(withDuration: 0.3, delay: 2.0) {
+                toast.alpha = 0
+            } completion: { _ in
+                toast.removeFromSuperview()
+            }
+        }
+    }
+
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    private func showConfirmation(title: String, message: String, onConfirm: @escaping () -> Void) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in onConfirm() })
+        present(alert, animated: true)
+    }
+
+    private var allChipsData: [(title: String, icon: String, category: RoomCategory?, roomType: RoomType?)] {
+        var chips: [(String, String, RoomCategory?, RoomType?)] = [("All", "square.grid.2x2", nil, nil)]
+
+        // Add room type chips
+        RoomType.allCases.forEach {
+            chips.append(($0.displayName, $0.sfSymbol, nil, $0))
+        }
+
+        // Add category chips
+        RoomCategory.allCases.forEach {
+            chips.append(($0.displayName, $0.sfSymbol, $0, nil))
+        }
+
+        return chips
     }
 }
 
-// MARK: - Document Picker
+// MARK: - UIDocumentPickerDelegate
 extension MyRoomsViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         importRoomFiles(urls)
     }
 }
 
-// MARK: - CollectionView
+// MARK: - UICollectionViewDataSource & Delegate
 extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDelegate {
 
+    func numberOfSections(in collectionView: UICollectionView) -> Int { 2 }
+
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return isSearching ? filteredFiles.count : roomFiles.count
+        section == 0 ? allChipsData.count : displayFiles.count
     }
 
-    func collectionView(_ collectionView: UICollectionView,
-                        cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        if indexPath.section == 0 {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ChipCell.reuseID, for: indexPath) as! ChipCell
+            let chip = allChipsData[indexPath.item]
 
-        let url = currentFile(at: indexPath)
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: RoomCell.reuseID, for: indexPath) as! RoomCell
-
-        cell.configure(
-            fileName: url.lastPathComponent,
-            size: fileSizeString(for: url),
-            thumbnail: nil
-        )
-
-        generateThumbnail(for: url) { image in
-            if let cell = collectionView.cellForItem(at: indexPath) as? RoomCell {
-                cell.configure(
-                    fileName: url.lastPathComponent,
-                    size: self.fileSizeString(for: url),
-                    thumbnail: image
-                )
+            // Determine if chip is selected
+            let isSelected: Bool
+            if chip.category == nil && chip.roomType == nil {
+                // "All" chip
+                isSelected = selectedCategory == nil && selectedRoomType == nil
+            } else if let category = chip.category {
+                isSelected = category == selectedCategory
+            } else if let roomType = chip.roomType {
+                isSelected = roomType == selectedRoomType
+            } else {
+                isSelected = false
             }
-        }
 
-        return cell
+            cell.configure(title: chip.title, icon: chip.icon, category: chip.category, roomType: chip.roomType, isSelected: isSelected)
+            cell.button.addTarget(self, action: #selector(chipTapped(_:)), for: .touchUpInside)
+            return cell
+        } else {
+            let url = displayFiles[indexPath.item]
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: RoomCell.reuseID, for: indexPath) as! RoomCell
+            cell.configure(fileName: url.lastPathComponent, size: fileSizeString(for: url), thumbnail: nil)
+
+            generateThumbnail(for: url) { [weak self] image in
+                guard let self = self,
+                      let cell = self.collectionView.cellForItem(at: indexPath) as? RoomCell else { return }
+                cell.configure(fileName: url.lastPathComponent, size: self.fileSizeString(for: url), thumbnail: image)
+            }
+
+            return cell
+        }
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        // If in multiple selection mode, just toggle selection
-        if collectionView.allowsMultipleSelection {
-            return
-        }
+        guard indexPath.section == 1, !collectionView.allowsMultipleSelection else { return }
 
-        // Otherwise, open the room viewer
-        let url = currentFile(at: indexPath)
-        let vc = RoomViewerViewController(roomURL: url)
-        navigationController?.pushViewController(vc, animated: true)
+        let url = displayFiles[indexPath.item]
+        navigationController?.pushViewController(RoomViewerViewController(roomURL: url), animated: true)
     }
 
-    // MARK: - Context Menu
     func collectionView(_ collectionView: UICollectionView,
                         contextMenuConfigurationForItemAt indexPath: IndexPath,
                         point: CGPoint) -> UIContextMenuConfiguration? {
+        guard indexPath.section == 1 else { return nil }
 
-        let url = currentFile(at: indexPath)
-
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
-
-            let quickLookAction = UIAction(
-                title: "Quick Look",
-                image: UIImage(systemName: "eye")
-            ) { [weak self] _ in
-                self?.quickLook(url: url)
-            }
-
-            let renameAction = UIAction(
-                title: "Rename",
-                image: UIImage(systemName: "pencil")
-            ) { [weak self] _ in
-                self?.showRenameDialog(for: url, at: indexPath)
-            }
-
-            let shareAction = UIAction(
-                title: "Share",
-                image: UIImage(systemName: "square.and.arrow.up")
-            ) { [weak self] _ in
-                self?.shareRoom(url: url)
-            }
-
-            let deleteAction = UIAction(
-                title: "Delete",
-                image: UIImage(systemName: "trash"),
-                attributes: .destructive
-            ) { [weak self] _ in
-                self?.confirmDelete(url: url, at: indexPath)
-            }
-
-            return UIMenu(
-                title: "",
-                children: [quickLookAction, renameAction, shareAction, deleteAction]
-            )
+        let url = displayFiles[indexPath.item]
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            UIMenu(children: [
+                UIAction(title: "Quick Look", image: UIImage(systemName: "eye")) { _ in
+                    self?.quickLook(url: url)
+                },
+                UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { _ in
+                    self?.showRenameDialog(for: url)
+                },
+                UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { _ in
+                    self?.shareRoom(url: url)
+                },
+                UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                    self?.confirmDelete(url: url)
+                }
+            ])
         }
     }
 
-    func collectionView1(_ collectionView: UICollectionView,
-                         contextMenuConfigurationForItemAt indexPath: IndexPath,
-                         point: CGPoint) -> UIContextMenuConfiguration? {
-
-        let url = currentFile(at: indexPath)
-
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
-            let renameAction = UIAction(
-                title: "Rename",
-                image: UIImage(systemName: "pencil")
-            ) { [weak self] _ in
-                self?.showRenameDialog(for: url, at: indexPath)
-            }
-
-            let shareAction = UIAction(
-                title: "Share",
-                image: UIImage(systemName: "square.and.arrow.up")
-            ) { [weak self] _ in
-                self?.shareRoom(url: url)
-            }
-
-            let deleteAction = UIAction(
-                title: "Delete",
-                image: UIImage(systemName: "trash"),
-                attributes: .destructive
-            ) { [weak self] _ in
-                self?.confirmDelete(url: url, at: indexPath)
-            }
-
-            return UIMenu(title: "", children: [renameAction, shareAction, deleteAction])
-        }
-    }
-
-    // MARK: - Context Menu Actions
-
-    private func showRenameDialog(for url: URL, at indexPath: IndexPath) {
-        let currentName = url.deletingPathExtension().lastPathComponent
-
-        let alert = UIAlertController(
-            title: "Rename Room",
-            message: "Enter a new name for this room",
-            preferredStyle: .alert
-        )
-
-        alert.addTextField { textField in
-            textField.text = currentName
-            textField.placeholder = "Room name"
-            textField.autocapitalizationType = .words
-        }
-
+    private func showRenameDialog(for url: URL) {
+        let alert = UIAlertController(title: "Rename Room", message: "Enter a new name for this room", preferredStyle: .alert)
+        alert.addTextField { $0.text = url.deletingPathExtension().lastPathComponent; $0.autocapitalizationType = .words }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self, weak alert] _ in
-            guard let newName = alert?.textFields?.first?.text,
-                  !newName.trimmingCharacters(in: .whitespaces).isEmpty else {
-                return
-            }
-
-            self?.performRename(url: url, newName: newName, at: indexPath)
+            guard let newName = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespaces),
+                  !newName.isEmpty else { return }
+            self?.performRename(url: url, newName: newName)
         })
-
         present(alert, animated: true)
     }
 
-    private func performRename(url: URL, newName: String, at indexPath: IndexPath) {
-        let fileManager = FileManager.default
-        let directory = url.deletingLastPathComponent()
-        let newURL = directory.appendingPathComponent("\(newName).usdz")
+    private func performRename(url: URL, newName: String) {
+        let fm = FileManager.default
+        let dir = url.deletingLastPathComponent()
+        let newURL = dir.appendingPathComponent("\(newName).usdz")
+        let oldBase = url.deletingPathExtension().lastPathComponent
 
         do {
-            // Rename the main file
-            try fileManager.moveItem(at: url, to: newURL)
+            try fm.moveItem(at: url, to: newURL)
 
-            // Rename associated files (thumbnail and metadata)
-            let oldBaseName = url.deletingPathExtension().lastPathComponent
-            let thumbOldURL = directory.appendingPathComponent("\(oldBaseName)_thumb.jpg")
-            let thumbNewURL = directory.appendingPathComponent("\(newName)_thumb.jpg")
-            let metaOldURL = directory.appendingPathComponent("\(oldBaseName)_meta.json")
-            let metaNewURL = directory.appendingPathComponent("\(newName)_meta.json")
-
-            if fileManager.fileExists(atPath: thumbOldURL.path) {
-                try? fileManager.moveItem(at: thumbOldURL, to: thumbNewURL)
+            // Rename associated files
+            [("_thumb.jpg", "_thumb.jpg"), ("_meta.json", "_meta.json")].forEach { suffix in
+                let old = dir.appendingPathComponent("\(oldBase)\(suffix.0)")
+                let new = dir.appendingPathComponent("\(newName)\(suffix.1)")
+                try? fm.moveItem(at: old, to: new)
             }
 
-            if fileManager.fileExists(atPath: metaOldURL.path) {
-                try? fileManager.moveItem(at: metaOldURL, to: metaNewURL)
-            }
-
-            // Reload the file list
-            loadRoomFiles(from: roomsFolderURL())
+            loadRoomFiles()
             showToast(message: "Renamed to \(newName)")
-
         } catch {
-            let alert = UIAlertController(
-                title: "Rename Failed",
-                message: error.localizedDescription,
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
+            showAlert(title: "Rename Failed", message: error.localizedDescription)
         }
     }
 
     private func shareRoom(url: URL) {
-        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-
-        if let popover = activityVC.popoverPresentationController {
+        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        if let popover = vc.popoverPresentationController {
             popover.sourceView = view
             popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
             popover.permittedArrowDirections = []
         }
-
-        present(activityVC, animated: true)
+        present(vc, animated: true)
     }
 
-    private func confirmDelete(url: URL, at indexPath: IndexPath) {
-        let alert = UIAlertController(
-            title: "Delete Room?",
-            message: "This action cannot be undone.",
-            preferredStyle: .alert
-        )
-
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
-            self?.performDelete(url: url, at: indexPath)
-        })
-
-        present(alert, animated: true)
-    }
-
-    private func performDelete(url: URL, at indexPath: IndexPath) {
-        SaveManager.shared.deleteModel(at: url) { [weak self] success in
-            guard let self = self else { return }
-
-            if success {
-                self.loadRoomFiles(from: self.roomsFolderURL())
-                self.showToast(message: "Room deleted")
-            } else {
-                let alert = UIAlertController(
-                    title: "Delete Failed",
-                    message: "Could not delete the room model.",
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(alert, animated: true)
+    private func confirmDelete(url: URL) {
+        showConfirmation(title: "Delete Room?", message: "This action cannot be undone.") { [weak self] in
+            SaveManager.shared.deleteModel(at: url) { [weak self] success in
+                if success {
+                    self?.loadRoomFiles()
+                    self?.showToast(message: "Room deleted")
+                } else {
+                    self?.showAlert(title: "Delete Failed", message: "Could not delete the room model.")
+                }
             }
         }
     }
 
-    // Swipe-to-delete
     func collectionView(_ collectionView: UICollectionView,
-                        trailingSwipeActionsConfigurationForItemAt indexPath: IndexPath)
-        -> UISwipeActionsConfiguration? {
+                        trailingSwipeActionsConfigurationForItemAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard indexPath.section == 1 else { return nil }
 
-        let delete = UIContextualAction(style: .destructive, title: "Delete") { _, _, completion in
-            let url = self.currentFile(at: indexPath)
+        let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, completion in
+            guard let self = self else { completion(false); return }
+            let url = self.displayFiles[indexPath.item]
             try? FileManager.default.removeItem(at: url)
-
-            if self.isSearching {
-                self.filteredFiles.remove(at: indexPath.item)
-                self.roomFiles.removeAll { $0 == url }
-            } else {
-                self.roomFiles.remove(at: indexPath.item)
-            }
-
+            self.roomFiles.removeAll { $0 == url }
             self.thumbnailCache.removeObject(forKey: url as NSURL)
             collectionView.deleteItems(at: [indexPath])
             completion(true)
@@ -844,37 +628,86 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
     }
 }
 
-// MARK: - Search
+// MARK: - UISearchResultsUpdating
 extension MyRoomsViewController: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {
-        let q = searchController.searchBar.text?.trimmingCharacters(in: .whitespaces) ?? ""
-        if q.isEmpty {
-            filteredFiles = []
-        } else {
-            filteredFiles = roomFiles.filter {
-                $0.lastPathComponent.localizedCaseInsensitiveContains(q)
-            }
-        }
         collectionView.reloadData()
     }
 }
 
-// quick look
+// MARK: - QLPreviewControllerDataSource
 extension MyRoomsViewController: QLPreviewControllerDataSource {
-
     func quickLook(url: URL) {
         previewURL = url
-        let previewController = QLPreviewController()
-        previewController.dataSource = self
-        present(previewController, animated: true)
+        let preview = QLPreviewController()
+        preview.dataSource = self
+        present(preview, animated: true)
     }
 
-    // MARK: - QLPreview Data Source
-    func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
-        return 1
-    }
-
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-        return previewURL as NSURL
+        previewURL as NSURL
+    }
+}
+
+// MARK: - Models
+struct RoomMetadata: Codable {
+    let category: RoomCategory
+    let roomType: RoomType
+    let createdAt: Date
+    let dimensions: RoomDimensions?
+
+    struct RoomDimensions: Codable {
+        let width: Double
+        let height: Double
+        let length: Double
+    }
+}
+
+// MARK: - ChipCell
+final class ChipCell: UICollectionViewCell {
+    static let reuseID = "ChipCell"
+    let button = UIButton(type: .system)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.layer.cornerRadius = 16
+        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        contentView.addSubview(button)
+        NSLayoutConstraint.activate([
+                                        button.topAnchor.constraint(equalTo: contentView.topAnchor),
+                                        button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                                        button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                                        button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+                                    ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(title: String, icon: String, category: RoomCategory?, roomType: RoomType?, isSelected: Bool) {
+        let color: UIColor
+        if let category = category {
+            color = category.color
+        } else if let roomType = roomType {
+            color = roomType.color
+        } else {
+            color = .systemIndigo
+        }
+
+        button.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
+        button.tintColor = isSelected ? .white : color
+
+        let attachment = NSTextAttachment()
+        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        attachment.image = UIImage(systemName: icon, withConfiguration: config)?.withTintColor(button.tintColor, renderingMode: .alwaysOriginal)
+
+        let attributedString = NSMutableAttributedString(attachment: attachment)
+        attributedString.append(NSAttributedString(string: "  \(title)", attributes: [
+            .font: UIFont.systemFont(ofSize: 14, weight: .medium),
+            .foregroundColor: button.tintColor
+        ]))
+
+        button.setAttributedTitle(attributedString, for: .normal)
     }
 }

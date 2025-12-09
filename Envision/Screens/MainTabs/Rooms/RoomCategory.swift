@@ -2,8 +2,6 @@
 //  RoomCategory.swift
 //  Envision
 //
-//  Room category for filtering and organization
-//
 
 import UIKit
 
@@ -12,34 +10,52 @@ enum RoomCategory: String, Codable, CaseIterable {
     case bedroom = "Bedroom"
     case studyRoom = "Study Room"
     case office = "Office"
-    
+
     var sfSymbol: String {
         switch self {
-        case .livingRoom:
-            return "sofa.fill"
-        case .bedroom:
-            return "bed.double.fill"
-        case .studyRoom:
-            return "books.vertical.fill"
-        case .office:
-            return "briefcase.fill"
+        case .livingRoom: "sofa.fill"
+        case .bedroom: "bed.double.fill"
+        case .studyRoom: "books.vertical.fill"
+        case .office: "briefcase.fill"
         }
     }
-    
+
     var color: UIColor {
         switch self {
-        case .livingRoom:
-            return .systemOrange
-        case .bedroom:
-            return .systemPurple
-        case .studyRoom:
-            return .systemBlue
-        case .office:
-            return .systemGreen
+        case .livingRoom: .systemOrange
+        case .bedroom: .systemPurple
+        case .studyRoom: .systemBlue
+        case .office: .systemGreen
         }
     }
-    
-    var displayName: String {
-        return self.rawValue
+
+    var displayName: String { rawValue }
+}
+
+enum RoomType: String, Codable, CaseIterable {
+    case parametric = "Parametric"
+    case textured = "Textured"
+
+    var sfSymbol: String {
+        switch self {
+        case .parametric: "cube.transparent"
+        case .textured: "photo.fill.on.rectangle.fill"
+        }
+    }
+
+    var color: UIColor {
+        switch self {
+        case .parametric: .systemTeal
+        case .textured: .systemPink
+        }
+    }
+
+    var displayName: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .parametric: "RoomPlan API"
+        case .textured: "Object Capture"
+        }
     }
 }
