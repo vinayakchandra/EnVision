@@ -76,9 +76,15 @@ final class MyRoomsViewController: UIViewController {
     }
 
     private func setupNavigationBar() {
+        let scanButton = UIBarButtonItem(image: UIImage(systemName: "camera.viewfinder"), style: .plain, target: self, action: #selector(scanTapped))
+        scanButton.tintColor = .systemGreen
+
+        let importButton = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"), style: .plain, target: self, action: #selector(importTapped))
+        importButton.tintColor = .systemBlue
+
         navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(image: UIImage(systemName: "camera.viewfinder"), style: .plain, target: self, action: #selector(scanTapped)),
-            UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"), style: .plain, target: self, action: #selector(importTapped))
+            scanButton,
+            importButton
         ]
 
         navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: makeMenu())
