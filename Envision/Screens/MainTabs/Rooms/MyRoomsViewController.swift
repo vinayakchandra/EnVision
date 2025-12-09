@@ -556,16 +556,22 @@ final class MyRoomsViewController: UIViewController {
     }
 
     private var allChipsData: [(title: String, icon: String, category: RoomCategory?, roomType: RoomType?)] {
-        var chips: [(String, String, RoomCategory?, RoomType?)] = [("All", "square.grid.2x2", nil, nil)]
+        var chips: [(String, String, RoomCategory?, RoomType?)] = []
 
-        // Add room type chips
-        RoomType.allCases.forEach {
-            chips.append(($0.displayName, $0.sfSymbol, nil, $0))
+        // "All" chip with total count
+        let totalCount = roomFiles.count
+        chips.append(("All (\(totalCount))", "square.grid.2x2", nil, nil))
+
+        // Add room type chips with counts
+        for roomType in RoomType.allCases {
+            let count = roomFiles.filter { loadMetadata(for: $0)?.roomType == roomType }.count
+            chips.append(("\(roomType.displayName) (\(count))", roomType.sfSymbol, nil, roomType))
         }
 
-        // Add category chips
-        RoomCategory.allCases.forEach {
-            chips.append(($0.displayName, $0.sfSymbol, $0, nil))
+        // Add category chips with counts
+        for category in RoomCategory.allCases {
+            let count = roomFiles.filter { loadMetadata(for: $0)?.category == category }.count
+            chips.append(("\(category.displayName) (\(count))", category.sfSymbol, category, nil))
         }
 
         return chips
