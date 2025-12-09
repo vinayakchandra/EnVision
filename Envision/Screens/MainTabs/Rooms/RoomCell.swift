@@ -47,7 +47,7 @@ final class RoomCell: UICollectionViewCell {
     private let categoryBadge: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.backgroundColor = .systemBackground.withAlphaComponent(0.8)
+        view.backgroundColor = .systemBackground.withAlphaComponent(0.7)
         view.layer.cornerRadius = 12
         view.layer.shadowColor = UIColor.black.cgColor
         view.layer.shadowOpacity = 0.15
@@ -71,6 +71,35 @@ final class RoomCell: UICollectionViewCell {
         return lbl
     }()
 
+    // MARK: - RoomType Badge
+
+    private let roomTypeBadge: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = .systemBackground.withAlphaComponent(0.7)
+        view.layer.cornerRadius = 12
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.15
+        view.layer.shadowOffset = CGSize(width: 0, height: 2)
+        view.layer.shadowRadius = 4
+        view.isHidden = true
+        return view
+    }()
+
+    private let roomTypeIcon: UIImageView = {
+        let iv = UIImageView()
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.contentMode = .scaleAspectFit
+        return iv
+    }()
+
+    private let roomTypeLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        lbl.font = .systemFont(ofSize: 11, weight: .medium)
+        return lbl
+    }()
+
     // MARK: - Init
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -88,10 +117,15 @@ final class RoomCell: UICollectionViewCell {
         container.addSubview(titleLabel)
         container.addSubview(sizeLabel)
 
-        // Add badge to thumbnail
+        // Add badges
         thumbnailView.addSubview(categoryBadge)
+        thumbnailView.addSubview(roomTypeBadge)
+
         categoryBadge.addSubview(categoryIcon)
         categoryBadge.addSubview(categoryLabel)
+
+        roomTypeBadge.addSubview(roomTypeIcon)
+        roomTypeBadge.addSubview(roomTypeLabel)
 
         contentView.backgroundColor = .clear
         contentView.layer.shadowColor = UIColor.black.cgColor
@@ -100,28 +134,46 @@ final class RoomCell: UICollectionViewCell {
         contentView.layer.shadowOpacity = 0.1
 
         NSLayoutConstraint.activate([
+            // Container
             container.topAnchor.constraint(equalTo: contentView.topAnchor),
             container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
 
+            // Thumbnail
             thumbnailView.topAnchor.constraint(equalTo: container.topAnchor),
             thumbnailView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             thumbnailView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             thumbnailView.heightAnchor.constraint(equalTo: container.heightAnchor, multiplier: 0.65),
 
+            // Title
             titleLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: 6),
             titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
             titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
 
+            // Size
             sizeLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
             sizeLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
             sizeLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
             sizeLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
 
-            // Badge constraints
-            categoryBadge.topAnchor.constraint(equalTo: thumbnailView.topAnchor, constant: 8),
-            categoryBadge.leadingAnchor.constraint(equalTo: thumbnailView.leadingAnchor, constant: 8),
+            // MARK: - Category Badge constraints
+            roomTypeBadge.topAnchor.constraint(equalTo: thumbnailView.topAnchor, constant: 8),
+            roomTypeBadge.trailingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: -8),
+            roomTypeBadge.heightAnchor.constraint(equalToConstant: 24),
+
+            roomTypeIcon.leadingAnchor.constraint(equalTo: roomTypeBadge.leadingAnchor, constant: 6),
+            roomTypeIcon.centerYAnchor.constraint(equalTo: roomTypeBadge.centerYAnchor),
+            roomTypeIcon.widthAnchor.constraint(equalToConstant: 14),
+            roomTypeIcon.heightAnchor.constraint(equalToConstant: 14),
+
+            roomTypeLabel.leadingAnchor.constraint(equalTo: roomTypeIcon.trailingAnchor, constant: 4),
+            roomTypeLabel.trailingAnchor.constraint(equalTo: roomTypeBadge.trailingAnchor, constant: -8),
+            roomTypeLabel.centerYAnchor.constraint(equalTo: roomTypeBadge.centerYAnchor),
+
+            // CATEGORY Badge — BELOW roomType badge
+            categoryBadge.topAnchor.constraint(equalTo: roomTypeBadge.bottomAnchor, constant: 6),
+            categoryBadge.trailingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: -8),
             categoryBadge.heightAnchor.constraint(equalToConstant: 24),
 
             categoryIcon.leadingAnchor.constraint(equalTo: categoryBadge.leadingAnchor, constant: 6),
@@ -135,37 +187,43 @@ final class RoomCell: UICollectionViewCell {
         ])
     }
 
+    // MARK: - Reuse
     override func prepareForReuse() {
         super.prepareForReuse()
         thumbnailView.image = nil
         titleLabel.text = nil
         sizeLabel.text = nil
         categoryBadge.isHidden = true
+        roomTypeBadge.isHidden = true
     }
 
     // MARK: - Configure
 
-    /// Updated version with category/roomType badges
     func configure(fileName: String, size: String, thumbnail: UIImage?, category: RoomCategory? = nil, roomType: RoomType? = nil) {
         titleLabel.text = fileName
         sizeLabel.text = size
         thumbnailView.image = thumbnail ?? UIImage(systemName: "arkit")!
 
-        // Configure category badge
+        // Reset badges
+        categoryBadge.isHidden = true
+        roomTypeBadge.isHidden = true
+
+        // Category Badge
         if let category = category {
             categoryIcon.image = UIImage(systemName: category.sfSymbol)
             categoryIcon.tintColor = category.color
             categoryLabel.text = category.displayName
             categoryLabel.textColor = category.color
             categoryBadge.isHidden = false
-        } else if let roomType = roomType {
-            categoryIcon.image = UIImage(systemName: roomType.sfSymbol)
-            categoryIcon.tintColor = roomType.color
-            categoryLabel.text = roomType.displayName
-            categoryLabel.textColor = roomType.color
-            categoryBadge.isHidden = false
-        } else {
-            categoryBadge.isHidden = true
+        }
+
+        // RoomType Badge
+        if let roomType = roomType {
+            roomTypeIcon.image = UIImage(systemName: roomType.sfSymbol)
+            roomTypeIcon.tintColor = roomType.color
+            roomTypeLabel.text = roomType.displayName
+            roomTypeLabel.textColor = roomType.color
+            roomTypeBadge.isHidden = false
         }
     }
 
@@ -174,5 +232,6 @@ final class RoomCell: UICollectionViewCell {
         titleLabel.text = model.name ?? "Room"
         thumbnailView.image = model.thumbnail ?? UIImage(systemName: "square.split.2x2")!
         categoryBadge.isHidden = true
+        roomTypeBadge.isHidden = true
     }
 }
