@@ -10,6 +10,7 @@ enum RoomCategory: String, Codable, CaseIterable {
     case bedroom = "Bedroom"
     case studyRoom = "Study Room"
     case office = "Office"
+    case other = "Other"
 
     var sfSymbol: String {
         switch self {
@@ -17,6 +18,7 @@ enum RoomCategory: String, Codable, CaseIterable {
         case .bedroom: "bed.double.fill"
         case .studyRoom: "books.vertical.fill"
         case .office: "briefcase.fill"
+        case .other: "questionmark.folder.fill"
         }
     }
 
@@ -26,6 +28,7 @@ enum RoomCategory: String, Codable, CaseIterable {
         case .bedroom: .systemPurple
         case .studyRoom: .systemBlue
         case .office: .systemGreen
+        case .other: .systemGray
         }
     }
 
