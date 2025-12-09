@@ -43,8 +43,35 @@ final class RoomCell: UICollectionViewCell {
         return v
     }()
 
-    // MARK: - Init
+    // Category Badge
+    private let categoryBadge: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = .systemBackground.withAlphaComponent(0.8)
+        view.layer.cornerRadius = 12
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.15
+        view.layer.shadowOffset = CGSize(width: 0, height: 2)
+        view.layer.shadowRadius = 4
+        view.isHidden = true
+        return view
+    }()
 
+    private let categoryIcon: UIImageView = {
+        let iv = UIImageView()
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.contentMode = .scaleAspectFit
+        return iv
+    }()
+
+    private let categoryLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        lbl.font = .systemFont(ofSize: 11, weight: .medium)
+        return lbl
+    }()
+
+    // MARK: - Init
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
@@ -55,12 +82,16 @@ final class RoomCell: UICollectionViewCell {
     }
 
     // MARK: - Setup
-
     private func setupUI() {
         contentView.addSubview(container)
         container.addSubview(thumbnailView)
         container.addSubview(titleLabel)
         container.addSubview(sizeLabel)
+
+        // Add badge to thumbnail
+        thumbnailView.addSubview(categoryBadge)
+        categoryBadge.addSubview(categoryIcon)
+        categoryBadge.addSubview(categoryLabel)
 
         contentView.backgroundColor = .clear
         contentView.layer.shadowColor = UIColor.black.cgColor
@@ -86,7 +117,21 @@ final class RoomCell: UICollectionViewCell {
             sizeLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
             sizeLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
             sizeLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
-            sizeLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
+            sizeLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+
+            // Badge constraints
+            categoryBadge.topAnchor.constraint(equalTo: thumbnailView.topAnchor, constant: 8),
+            categoryBadge.leadingAnchor.constraint(equalTo: thumbnailView.leadingAnchor, constant: 8),
+            categoryBadge.heightAnchor.constraint(equalToConstant: 24),
+
+            categoryIcon.leadingAnchor.constraint(equalTo: categoryBadge.leadingAnchor, constant: 6),
+            categoryIcon.centerYAnchor.constraint(equalTo: categoryBadge.centerYAnchor),
+            categoryIcon.widthAnchor.constraint(equalToConstant: 14),
+            categoryIcon.heightAnchor.constraint(equalToConstant: 14),
+
+            categoryLabel.leadingAnchor.constraint(equalTo: categoryIcon.trailingAnchor, constant: 4),
+            categoryLabel.trailingAnchor.constraint(equalTo: categoryBadge.trailingAnchor, constant: -8),
+            categoryLabel.centerYAnchor.constraint(equalTo: categoryBadge.centerYAnchor)
         ])
     }
 
@@ -95,21 +140,39 @@ final class RoomCell: UICollectionViewCell {
         thumbnailView.image = nil
         titleLabel.text = nil
         sizeLabel.text = nil
+        categoryBadge.isHidden = true
     }
 
     // MARK: - Configure
 
-    /// Use this version when working with disk files
-    func configure(fileName: String, size: String, thumbnail: UIImage?) {
+    /// Updated version with category/roomType badges
+    func configure(fileName: String, size: String, thumbnail: UIImage?, category: RoomCategory? = nil, roomType: RoomType? = nil) {
         titleLabel.text = fileName
         sizeLabel.text = size
         thumbnailView.image = thumbnail ?? UIImage(systemName: "arkit")!
+
+        // Configure category badge
+        if let category = category {
+            categoryIcon.image = UIImage(systemName: category.sfSymbol)
+            categoryIcon.tintColor = category.color
+            categoryLabel.text = category.displayName
+            categoryLabel.textColor = category.color
+            categoryBadge.isHidden = false
+        } else if let roomType = roomType {
+            categoryIcon.image = UIImage(systemName: roomType.sfSymbol)
+            categoryIcon.tintColor = roomType.color
+            categoryLabel.text = roomType.displayName
+            categoryLabel.textColor = roomType.color
+            categoryBadge.isHidden = false
+        } else {
+            categoryBadge.isHidden = true
+        }
     }
 
-    /// Use this version if you're working with RoomModel directly
+    /// Legacy version for backward compatibility
     func configure(with model: RoomModel) {
         titleLabel.text = model.name ?? "Room"
-//        sizeLabel.text = model.metadata ?? ""
         thumbnailView.image = model.thumbnail ?? UIImage(systemName: "square.split.2x2")!
+        categoryBadge.isHidden = true
     }
 }
