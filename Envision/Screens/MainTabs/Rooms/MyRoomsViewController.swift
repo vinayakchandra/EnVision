@@ -56,6 +56,10 @@ final class MyRoomsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+
+        // Clean up orphaned metadata
+        MetadataManager.shared.cleanupOrphanedMetadata()
+
         loadRoomFiles()
     }
 
@@ -283,7 +287,13 @@ final class MyRoomsViewController: UIViewController {
     private func performBatchDelete(_ urls: [URL]) {
         var count = 0
         urls.forEach { url in
-            SaveManager.shared.deleteModel(at: url) { if $0 { count += 1 } }
+            let filename = url.lastPathComponent
+            SaveManager.shared.deleteModel(at: url) { success in
+                if success {
+                    MetadataManager.shared.deleteMetadata(for: filename)
+                    count += 1
+                }
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -323,31 +333,118 @@ final class MyRoomsViewController: UIViewController {
         }
     }
 
+// Update your importRoomFiles method or add a new method:
+
     private func importRoomFiles(_ urls: [URL]) {
+        // Show picker for category and room type
+        showImportOptionsAlert(for: urls)
+    }
+
+    private func showImportOptionsAlert(for urls: [URL]) {
+        let alert = UIAlertController(
+            title: "Import Rooms",
+            message: "Select category and type for imported rooms",
+            preferredStyle: .alert
+        )
+
+        // Add action sheet for category
+        let categoryAction = UIAlertAction(title: "Select Category", style: .default) { [weak self] _ in
+            self?.showCategoryPicker(for: urls)
+        }
+
+        alert.addAction(categoryAction)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        present(alert, animated: true)
+    }
+
+    private func showCategoryPicker(for urls: [URL]) {
+        let alert = UIAlertController(title: "Select Category", message: nil, preferredStyle: .actionSheet)
+
+        // Add category options
+        for category in RoomCategory.allCases {
+            alert.addAction(UIAlertAction(title: category.displayName, style: .default) { [weak self] _ in
+                self?.showRoomTypePicker(for: urls, category: category)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+        }
+
+        present(alert, animated: true)
+    }
+
+    private func showRoomTypePicker(for urls: [URL], category: RoomCategory) {
+        let alert = UIAlertController(title: "Select Room Type", message: nil, preferredStyle: .actionSheet)
+
+        // Add room type options
+        for roomType in RoomType.allCases {
+            alert.addAction(UIAlertAction(title: "\(roomType.displayName) - \(roomType.description)", style: .default) { [weak self] _ in
+                self?.performImport(urls: urls, category: category, roomType: roomType)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+        }
+
+        present(alert, animated: true)
+    }
+
+    private func performImport(urls: [URL], category: RoomCategory, roomType: RoomType) {
         showLoading("Importing…")
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            urls.forEach { url in
+            let fm = FileManager.default
+            let destDir = self.roomsFolderURL
+
+            for url in urls {
                 url.startAccessingSecurityScopedResource()
                 defer { url.stopAccessingSecurityScopedResource() }
 
-                let dest = self.roomsFolderURL.appendingPathComponent(url.lastPathComponent)
-                try? FileManager.default.removeItem(at: dest)
-                try? FileManager.default.copyItem(at: url, to: dest)
+                let dest = destDir.appendingPathComponent(url.lastPathComponent)
+
+                // Remove existing file if present
+                try? fm.removeItem(at: dest)
+
+                // Copy the file
+                try? fm.copyItem(at: url, to: dest)
+
+                // Create metadata
+                let metadata = RoomMetadata(
+                    category: category,
+                    roomType: roomType,
+                    createdAt: Date(),
+                    dimensions: nil,
+                    tags: [],
+                    notes: nil
+                )
+
+                MetadataManager.shared.updateMetadata(
+                    for: dest.lastPathComponent,
+                    metadata: metadata
+                )
             }
 
-            DispatchQueue.main.async { self.loadRoomFiles() }
+            DispatchQueue.main.async {
+                self.loadRoomFiles()
+            }
         }
     }
 
+// REPLACE THIS METHOD:
     private func loadMetadata(for url: URL) -> RoomMetadata? {
-        let metaURL = url.deletingLastPathComponent()
-            .appendingPathComponent("\(url.deletingPathExtension().lastPathComponent)_meta.json")
-
-        guard let data = try? Data(contentsOf: metaURL) else { return nil }
-        return try? JSONDecoder().decode(RoomMetadata.self, from: data)
+        let filename = url.lastPathComponent
+        return MetadataManager.shared.getMetadata(for: filename)
     }
 
     private func updateTitle() {
@@ -568,17 +665,14 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
         let fm = FileManager.default
         let dir = url.deletingLastPathComponent()
         let newURL = dir.appendingPathComponent("\(newName).usdz")
-        let oldBase = url.deletingPathExtension().lastPathComponent
+        let oldFilename = url.lastPathComponent
+        let newFilename = newURL.lastPathComponent
 
         do {
             try fm.moveItem(at: url, to: newURL)
 
-            // Rename associated files
-            [("_thumb.jpg", "_thumb.jpg"), ("_meta.json", "_meta.json")].forEach { suffix in
-                let old = dir.appendingPathComponent("\(oldBase)\(suffix.0)")
-                let new = dir.appendingPathComponent("\(newName)\(suffix.1)")
-                try? fm.moveItem(at: old, to: new)
-            }
+            // Update metadata with new filename
+            MetadataManager.shared.renameMetadata(from: oldFilename, to: newFilename)
 
             loadRoomFiles()
             showToast(message: "Renamed to \(newName)")
@@ -599,8 +693,13 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
 
     private func confirmDelete(url: URL) {
         showConfirmation(title: "Delete Room?", message: "This action cannot be undone.") { [weak self] in
+            let filename = url.lastPathComponent
+
             SaveManager.shared.deleteModel(at: url) { [weak self] success in
                 if success {
+                    // Delete metadata
+                    MetadataManager.shared.deleteMetadata(for: filename)
+
                     self?.loadRoomFiles()
                     self?.showToast(message: "Room deleted")
                 } else {
@@ -651,18 +750,18 @@ extension MyRoomsViewController: QLPreviewControllerDataSource {
 }
 
 // MARK: - Models
-struct RoomMetadata: Codable {
-    let category: RoomCategory
-    let roomType: RoomType
-    let createdAt: Date
-    let dimensions: RoomDimensions?
-
-    struct RoomDimensions: Codable {
-        let width: Double
-        let height: Double
-        let length: Double
-    }
-}
+// struct RoomMetadata: Codable {
+//     let category: RoomCategory
+//     let roomType: RoomType
+//     let createdAt: Date
+//     let dimensions: RoomDimensions?
+//
+//     struct RoomDimensions: Codable {
+//         let width: Double
+//         let height: Double
+//         let length: Double
+//     }
+// }
 
 // MARK: - ChipCell
 final class ChipCell: UICollectionViewCell {
