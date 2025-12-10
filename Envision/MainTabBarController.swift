@@ -11,10 +11,10 @@ final class MainTabBarController: UITabBarController {
     private func setupTabs() {
 //        let home = UINavigationController(rootViewController: RoomsViewController())
         let home = UINavigationController(rootViewController: MyRoomsViewController())
-        home.tabBarItem = UITabBarItem(title: "Home", image: UIImage(systemName: "house"), selectedImage: UIImage(systemName: "house.fill"))
+        home.tabBarItem = UITabBarItem(title: "My Rooms", image: UIImage(systemName: "house"), selectedImage: UIImage(systemName: "house.fill"))
 
         let scan = UINavigationController(rootViewController: ScanFurnitureViewController())
-        scan.tabBarItem = UITabBarItem(title: "Scan Furniture", image: UIImage(systemName: "camera.viewfinder"), selectedImage: UIImage(systemName: "camera.viewfinder"))
+        scan.tabBarItem = UITabBarItem(title: "My Furniture", image: UIImage(named: "sofa.viewfinder"), selectedImage: UIImage(named: "sofa.viewfinder"))
 
 //        let shop = UINavigationController(rootViewController: ShopViewController())
 //        shop.tabBarItem = UITabBarItem(title: "Shop", image: UIImage(systemName: "bag"), selectedImage: UIImage(systemName: "bag.fill"))
@@ -35,13 +35,13 @@ final class MainTabBarController: UITabBarController {
         tabBar.layer.cornerRadius = 30
         tabBar.layer.masksToBounds = true
         tabBar.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        
+
         // Add subtle shadow
         tabBar.layer.shadowColor = UIColor.black.cgColor
         tabBar.layer.shadowOpacity = 0.1
         tabBar.layer.shadowOffset = CGSize(width: 0, height: -2)
         tabBar.layer.shadowRadius = 10
-        
+
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
         tabBar.isTranslucent = true
