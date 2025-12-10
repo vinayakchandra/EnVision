@@ -57,6 +57,7 @@ final class MyRoomsViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
 
+        title = "My Rooms"
         // Clean up orphaned metadata
         MetadataManager.shared.cleanupOrphanedMetadata()
 
@@ -248,7 +249,6 @@ final class MyRoomsViewController: UIViewController {
         }
 
         collectionView.reloadData()
-        updateTitle()
     }
 
     private func enableMultipleSelection() {
@@ -451,16 +451,6 @@ final class MyRoomsViewController: UIViewController {
     private func loadMetadata(for url: URL) -> RoomMetadata? {
         let filename = url.lastPathComponent
         return MetadataManager.shared.getMetadata(for: filename)
-    }
-
-    private func updateTitle() {
-        if let category = selectedCategory {
-            title = "\(category.displayName) (\(displayFiles.count))"
-        } else if let roomType = selectedRoomType {
-            title = "\(roomType.displayName) (\(displayFiles.count))"
-        } else {
-            title = "My Rooms"
-        }
     }
 
     // MARK: - Thumbnails
