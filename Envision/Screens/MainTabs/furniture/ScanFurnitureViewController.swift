@@ -35,12 +35,77 @@ final class ScanFurnitureViewController: UIViewController {
     private let thumbnailCache: NSCache<NSURL, UIImage> = .init()
     private var refreshControl: UIRefreshControl! // refresh
 
+    // MARK: - Filter State
+    private var selectedCategory: FurnitureCategory? = nil
+
+    private struct ChipData {
+        let title: String
+        let icon: String
+        let category: FurnitureCategory?
+        let color: UIColor
+    }
+
+    private var allChipsData: [ChipData] {
+        var chips: [ChipData] = [
+            ChipData(title: "All (\(furnitureFiles.count))", icon: "square.grid.2x2", category: nil, color: .systemIndigo)
+        ]
+        for cat in FurnitureCategory.allCases {
+            chips.append(ChipData(title: cat.rawValue, icon: cat.icon, category: cat, color: cat.color))
+        }
+        return chips
+    }
+
+    private var displayFiles: [URL] {
+        var files = isSearching ? filteredFiles : furnitureFiles
+        if let category = selectedCategory {
+            files = files.filter { getCategoryForURL($0) == category }
+        }
+        return files
+    }
+
+    private func getCategoryForURL(_ url: URL) -> FurnitureCategory {
+        // Check UserDefaults for saved category
+        let key = "furniture_category_\(url.lastPathComponent)"
+        if let savedCategory = UserDefaults.standard.string(forKey: key),
+           let category = FurnitureCategory(rawValue: savedCategory) {
+            return category
+        }
+        return inferCategory(from: url.deletingPathExtension().lastPathComponent)
+    }
+
+    private func inferCategory(from name: String) -> FurnitureCategory {
+        let lowercased = name.lowercased()
+        if lowercased.contains("chair") || lowercased.contains("sofa") || lowercased.contains("couch") || lowercased.contains("seat") {
+            return .seating
+        } else if lowercased.contains("table") || lowercased.contains("desk") {
+            return .tables
+        } else if lowercased.contains("cabinet") || lowercased.contains("shelf") || lowercased.contains("drawer") {
+            return .storage
+        } else if lowercased.contains("bed") || lowercased.contains("mattress") {
+            return .beds
+        } else if lowercased.contains("lamp") || lowercased.contains("light") {
+            return .lighting
+        } else if lowercased.contains("vase") || lowercased.contains("art") || lowercased.contains("decor") || lowercased.contains("plant") {
+            return .decor
+        } else if lowercased.contains("fridge") || lowercased.contains("oven") || lowercased.contains("stove") {
+            return .kitchen
+        } else if lowercased.contains("outdoor") || lowercased.contains("patio") || lowercased.contains("garden") {
+            return .outdoor
+        } else if lowercased.contains("office") || lowercased.contains("computer") {
+            return .office
+        } else if lowercased.contains("tv") || lowercased.contains("speaker") {
+            return .electronics
+        }
+        return .other
+    }
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "My Furnitures"
+        title = "My Furniture"
         navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
 
         setupNavigationBar()
         setupSearchController()
@@ -54,6 +119,9 @@ final class ScanFurnitureViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // Ensure large title is restored when coming back from other screens
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
         // Reload when returning from capture
         loadFurnitureFiles(from: furnitureFolderURL())
     }
@@ -274,15 +342,67 @@ final class ScanFurnitureViewController: UIViewController {
 
     // MARK: - Collection View
     private func setupCollectionView() {
-        let layout = createGridLayout()
+        let layout = createCompositionalLayout()
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.backgroundColor = .systemBackground
         collectionView.register(FurnitureCell.self, forCellWithReuseIdentifier: FurnitureCell.reuseIdentifier)
+        collectionView.register(FurnitureChipCell.self, forCellWithReuseIdentifier: FurnitureChipCell.reuseIdentifier)
         collectionView.dataSource = self
         collectionView.delegate = self
 
         view.addSubview(collectionView)
+    }
+
+    private func createCompositionalLayout() -> UICollectionViewLayout {
+        return UICollectionViewCompositionalLayout { [weak self] sectionIndex, _ in
+            if sectionIndex == 0 {
+                return self?.makeChipsSection()
+            } else {
+                return self?.makeFurnitureSection()
+            }
+        }
+    }
+
+    private func makeChipsSection() -> NSCollectionLayoutSection {
+        let itemSize = NSCollectionLayoutSize(
+            widthDimension: .estimated(100),
+            heightDimension: .absolute(32)
+        )
+        let item = NSCollectionLayoutItem(layoutSize: itemSize)
+
+        let groupSize = NSCollectionLayoutSize(
+            widthDimension: .estimated(100),
+            heightDimension: .absolute(32)
+        )
+        let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitems: [item])
+
+        let section = NSCollectionLayoutSection(group: group)
+        section.orthogonalScrollingBehavior = .continuous
+        section.interGroupSpacing = 8
+        section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        return section
+    }
+
+    private func makeFurnitureSection() -> NSCollectionLayoutSection {
+        let itemSize = NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1.0),
+            heightDimension: .fractionalHeight(1.0)
+        )
+        let item = NSCollectionLayoutItem(layoutSize: itemSize)
+        item.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+
+        let groupHeight: CGFloat = 200
+        let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2
+        let groupSize = NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1.0),
+            heightDimension: .absolute(groupHeight)
+        )
+
+        let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitem: item, count: columns)
+        let section = NSCollectionLayoutSection(group: group)
+        section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        return section
     }
 
     private func createGridLayout() -> UICollectionViewLayout {
@@ -524,7 +644,7 @@ final class ScanFurnitureViewController: UIViewController {
     // MARK: - Helpers
 
     private func modelURL(at indexPath: IndexPath) -> URL {
-        return isSearching ? filteredFiles[indexPath.item] : furnitureFiles[indexPath.item]
+        return displayFiles[indexPath.item]
     }
 
     private func fileSizeString(for url: URL) -> String {
@@ -592,11 +712,29 @@ final class ScanFurnitureViewController: UIViewController {
 
 // MARK: - UICollectionViewDataSource
 extension ScanFurnitureViewController: UICollectionViewDataSource {
+    func numberOfSections(in collectionView: UICollectionView) -> Int {
+        return 2
+    }
+
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return isSearching ? filteredFiles.count : furnitureFiles.count
+        if section == 0 {
+            return allChipsData.count
+        }
+        return displayFiles.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        if indexPath.section == 0 {
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FurnitureChipCell.reuseIdentifier, for: indexPath) as? FurnitureChipCell else {
+                return UICollectionViewCell()
+            }
+            let chip = allChipsData[indexPath.item]
+            let isSelected = (chip.category == selectedCategory)
+            cell.configure(title: chip.title, icon: chip.icon, color: chip.color, isSelected: isSelected)
+            cell.button.addTarget(self, action: #selector(chipButtonTapped(_:)), for: .touchUpInside)
+            return cell
+        }
+
         guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FurnitureCell.reuseIdentifier, for: indexPath) as? FurnitureCell else {
             return UICollectionViewCell()
         }
@@ -629,58 +767,110 @@ extension ScanFurnitureViewController: UICollectionViewDataSource {
 
 // MARK: - UICollectionViewDelegate
 extension ScanFurnitureViewController: UICollectionViewDelegate {
-    func collectionView1(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if collectionView.allowsMultipleSelection {
-            // In selection mode, just update UI
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        // Section 0: Chip selection
+        if indexPath.section == 0 {
+            chipTapped(at: indexPath.item)
             return
         }
 
-        // Single tap - show QuickLook preview with AR option
-        previewURL = modelURL(at: indexPath)
+        // Section 1: Furniture selection
+        let url = modelURL(at: indexPath)
+        let arVC = MultiModelARViewController()
+        arVC.loadModel(named: url.lastPathComponent)
+        navigationController?.pushViewController(arVC, animated: true)
+    }
+
+    @objc private func chipButtonTapped(_ sender: UIButton) {
+        guard let cell = sender.superview?.superview as? FurnitureChipCell,
+              let indexPath = collectionView.indexPath(for: cell) else { return }
+        chipTapped(at: indexPath.item)
+    }
+    private func chipTapped(at index: Int) {
+        let chip = allChipsData[index]
+
+        // Add press animation
+        if let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) as? FurnitureChipCell {
+            UIView.animate(withDuration: 0.1, animations: {
+                cell.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+            }) { _ in
+                UIView.animate(withDuration: 0.1) {
+                    cell.transform = .identity
+                }
+            }
+        }
+
+        selectedCategory = chip.category
+
+        // Animate filter change
+        UIView.transition(with: collectionView, duration: 0.25, options: .transitionCrossDissolve) {
+            self.collectionView.reloadData()
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        // No context menu for chips
+        guard indexPath.section == 1 else { return nil }
+
+        let url = modelURL(at: indexPath)
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let quickLook = UIAction(title: "Quick Look", image: UIImage(systemName: "eye")) { _ in
+                self?.showQuickLook(url: url)
+            }
+
+            let arView = UIAction(title: "View in AR", image: UIImage(systemName: "arkit")) { _ in
+                self?.showInAR(url: url)
+            }
+
+            let edit = UIAction(title: "Edit Model", image: UIImage(systemName: "pencil")) { _ in
+                self?.renameModel(at: indexPath, url: url)
+            }
+
+            let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { _ in
+                self?.shareModel(url: url)
+            }
+
+            let delete = UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                self?.deleteModel(at: indexPath, url: url)
+            }
+
+            return UIMenu(children: [quickLook, arView, edit, share, delete])
+        }
+    }
+
+    private func showQuickLook(url: URL) {
+        previewURL = url
         let preview = QLPreviewController()
         preview.dataSource = self
         present(preview, animated: true)
     }
 
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let url = modelURL(at: indexPath)
+    private func showInAR(url: URL) {
         let arVC = MultiModelARViewController()
-//        arVC.loadModel(named: url)
         arVC.loadModel(named: url.lastPathComponent)
-
         navigationController?.pushViewController(arVC, animated: true)
     }
 
-
-    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
-        let url = modelURL(at: indexPath)
-
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
-            let rename = UIAction(title: "Rename", image: UIImage(systemName: "pencil")) { _ in
-                self.renameModel(at: indexPath, url: url)
-            }
-
-            let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { _ in
-                self.shareModel(url: url)
-            }
-
-            let delete = UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
-                self.deleteModel(at: indexPath, url: url)
-            }
-
-            return UIMenu(children: [rename, share, delete])
-        }
-    }
-
     private func renameModel(at indexPath: IndexPath, url: URL) {
-        let alert = UIAlertController(title: "Rename Model", message: nil, preferredStyle: .alert)
+        let currentName = url.deletingPathExtension().lastPathComponent
+        let currentCategory = getCategoryForURL(url)
+
+        let alert = UIAlertController(title: "Edit Model", message: nil, preferredStyle: .alert)
         alert.addTextField { textField in
-            textField.text = url.deletingPathExtension().lastPathComponent
+            textField.text = currentName
             textField.placeholder = "Model name"
         }
 
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Rename", style: .default) { [weak self] _ in
+
+        alert.addAction(UIAlertAction(title: "Change Category", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            let newName = alert.textFields?.first?.text ?? currentName
+            self.showCategoryPicker(for: url, currentCategory: currentCategory, newName: newName, indexPath: indexPath)
+        })
+
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
             guard let newName = alert.textFields?.first?.text, !newName.isEmpty else {
                 return
             }
@@ -688,6 +878,41 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
         })
 
         present(alert, animated: true)
+    }
+
+    private func showCategoryPicker(for url: URL, currentCategory: FurnitureCategory, newName: String, indexPath: IndexPath) {
+        let alert = UIAlertController(title: "Select Category", message: "Current: \(currentCategory.rawValue)", preferredStyle: .actionSheet)
+
+        for category in FurnitureCategory.allCases {
+            let checkmark = category == currentCategory ? " ✓" : ""
+            alert.addAction(UIAlertAction(title: "\(category.rawValue)\(checkmark)", style: .default) { [weak self] _ in
+                self?.saveCategoryForModel(url: url, category: category, newName: newName, indexPath: indexPath)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+        }
+
+        present(alert, animated: true)
+    }
+
+    private func saveCategoryForModel(url: URL, category: FurnitureCategory, newName: String, indexPath: IndexPath) {
+        // Save category to UserDefaults using file name as key
+        let key = "furniture_category_\(url.lastPathComponent)"
+        UserDefaults.standard.set(category.rawValue, forKey: key)
+
+        // Rename if name changed
+        let currentName = url.deletingPathExtension().lastPathComponent
+        if newName != currentName && !newName.isEmpty {
+            performRename(at: indexPath, url: url, newName: newName)
+        } else {
+            collectionView.reloadItems(at: [indexPath])
+            showToast(message: "✓ Category updated to \(category.rawValue)")
+        }
     }
 
     private func performRename(at indexPath: IndexPath, url: URL, newName: String) {
@@ -830,5 +1055,49 @@ extension ScanFurnitureViewController: UIDocumentPickerDelegate {
                 self.showToast(message: "✓ Imported \(imported) model(s)")
             }
         }
+    }
+}
+
+// MARK: - FurnitureChipCell
+// MARK: - FurnitureChipCell
+final class FurnitureChipCell: UICollectionViewCell {
+    static let reuseIdentifier = "FurnitureChipCell"
+
+    let button = UIButton(type: .system)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.layer.cornerRadius = 16
+        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        contentView.addSubview(button)
+        NSLayoutConstraint.activate([
+                                        button.topAnchor.constraint(equalTo: contentView.topAnchor),
+                                        button.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                                        button.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                                        button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+                                    ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(title: String, icon: String, color: UIColor, isSelected: Bool) {
+        button.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
+        button.tintColor = isSelected ? .white : color
+
+        let attachment = NSTextAttachment()
+        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        attachment.image = UIImage(systemName: icon, withConfiguration: config)?.withTintColor(button.tintColor, renderingMode: .alwaysOriginal)
+
+        let attributedString = NSMutableAttributedString(attachment: attachment)
+        attributedString.append(NSAttributedString(string: "  \(title)", attributes: [
+            .font: UIFont.systemFont(ofSize: 14, weight: .medium),
+            .foregroundColor: button.tintColor as Any
+        ]))
+
+        button.setAttributedTitle(attributedString, for: .normal)
     }
 }
