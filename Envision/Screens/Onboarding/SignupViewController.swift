@@ -94,17 +94,17 @@ final class SignupViewController: UIViewController {
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                                        scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+                                        scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                                        scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                                        scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
-        ])
+                                        contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                                        contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                                        contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                                        contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                                        contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+                                    ])
     }
 
     // MARK: - UI Layout
@@ -118,55 +118,55 @@ final class SignupViewController: UIViewController {
         ].forEach { contentView.addSubview($0) }
 
         NSLayoutConstraint.activate([
-            logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
-            logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            logoImageView.heightAnchor.constraint(equalToConstant: 110),
+                                        logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
+                                        logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                                        logoImageView.heightAnchor.constraint(equalToConstant: 110),
 
-            titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 10),
-            titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                                        titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 10),
+                                        titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            nameField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 30),
-            nameField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 30),
-            nameField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -30),
+                                        nameField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 30),
+                                        nameField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 30),
+                                        nameField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -30),
 
-            emailField.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 14),
-            emailField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-            emailField.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        emailField.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 14),
+                                        emailField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        emailField.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
 
-            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 14),
-            passwordField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-            passwordField.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 14),
+                                        passwordField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        passwordField.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
 
-            confirmField.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 14),
-            confirmField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-            confirmField.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        confirmField.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 14),
+                                        confirmField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        confirmField.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
 
-            errorLabel.topAnchor.constraint(equalTo: confirmField.bottomAnchor, constant: 4),
-            errorLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            errorLabel.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.85),
+                                        errorLabel.topAnchor.constraint(equalTo: confirmField.bottomAnchor, constant: 4),
+                                        errorLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                                        errorLabel.widthAnchor.constraint(equalTo: contentView.widthAnchor, multiplier: 0.85),
 
-            createButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 20),
-            createButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-            createButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
-            createButton.heightAnchor.constraint(equalToConstant: 54),
+                                        createButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 20),
+                                        createButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        createButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        createButton.heightAnchor.constraint(equalToConstant: 54),
 
-            orLabel.topAnchor.constraint(equalTo: createButton.bottomAnchor, constant: 22),
-            orLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                                        orLabel.topAnchor.constraint(equalTo: createButton.bottomAnchor, constant: 22),
+                                        orLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            continueLabel.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 4),
-            continueLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                                        continueLabel.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 4),
+                                        continueLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            appleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
-            appleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-            appleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
-            appleButton.heightAnchor.constraint(equalToConstant: 50),
+                                        appleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
+                                        appleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        appleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
 
-            googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 18),
-            googleButton.leadingAnchor.constraint(equalTo: appleButton.leadingAnchor),
-            googleButton.trailingAnchor.constraint(equalTo: appleButton.trailingAnchor),
-            googleButton.heightAnchor.constraint(equalToConstant: 50),
-            googleButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
-        ])
+                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 18),
+                                        googleButton.leadingAnchor.constraint(equalTo: appleButton.leadingAnchor),
+                                        googleButton.trailingAnchor.constraint(equalTo: appleButton.trailingAnchor),
+                                        googleButton.heightAnchor.constraint(equalToConstant: 50),
+                                        googleButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
+                                    ])
     }
 
     // MARK: - Actions
@@ -196,10 +196,23 @@ final class SignupViewController: UIViewController {
 
         errorLabel.alpha = 0
 
-        // MARK: Navigate to next screen (REPLACE LATER)
-        let homeVC = MainTabBarController()
-        homeVC.modalPresentationStyle = .fullScreen
-        present(homeVC, animated: true)
+        // Signup using UserManager
+        UserManager.shared.signup(name: name, email: email, password: password) { [weak self] result in
+            switch result {
+            case .success(_):
+                // Navigate to main app
+                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let sceneDelegate = scene.delegate as? SceneDelegate {
+                    sceneDelegate.switchToMainApp()
+                } else {
+                    let homeVC = MainTabBarController()
+                    homeVC.modalPresentationStyle = .fullScreen
+                    self?.present(homeVC, animated: true)
+                }
+            case .failure(let error):
+                self?.showError(error.localizedDescription)
+            }
+        }
     }
 
     private func showError(_ msg: String) {

@@ -1,12 +1,9 @@
 //
-//  SettingsCell.swift
+//  ProfileCell.swift
 //  Envision
-//
-//  Created by admin55 on 17/11/25.
 //
 
 import UIKit
-
 
 class ProfileCell: UITableViewCell {
 
@@ -21,7 +18,6 @@ class ProfileCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupUI() {
-        iconView.tintColor = AppColors.accent
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -32,18 +28,32 @@ class ProfileCell: UITableViewCell {
         contentView.addSubview(titleLabel)
 
         NSLayoutConstraint.activate([
-            iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            iconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            iconView.widthAnchor.constraint(equalToConstant: 24),
-            iconView.heightAnchor.constraint(equalToConstant: 24),
+                                        iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+                                        iconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+                                        iconView.widthAnchor.constraint(equalToConstant: 24),
+                                        iconView.heightAnchor.constraint(equalToConstant: 24),
 
-            titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 16)
-        ])
+                                        titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+                                        titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 16)
+                                    ])
     }
 
-    func configure(icon: String, title: String) {
+    func configure(icon: String, title: String, isDestructive: Bool = false) {
         iconView.image = UIImage(systemName: icon)
         titleLabel.text = title
+
+        if isDestructive {
+            iconView.tintColor = .systemRed
+            titleLabel.textColor = .systemRed
+        } else {
+            iconView.tintColor = AppColors.accent
+            titleLabel.textColor = .label
+        }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        iconView.tintColor = AppColors.accent
+        titleLabel.textColor = .label
     }
 }

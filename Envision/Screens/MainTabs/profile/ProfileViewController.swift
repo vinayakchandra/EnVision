@@ -1,8 +1,6 @@
 //
-//  SettingsViewController.swift
+//  ProfileViewController.swift
 //  Envision
-//
-//  Created by admin55 on 17/11/25.
 //
 
 import UIKit
@@ -13,18 +11,10 @@ class ProfileViewController: UIViewController {
 
     // MARK: - Profile Components
     private let profileHeaderView = UIView()
-    private let scrollView = UIScrollView()
-    private let contentView = UIStackView()
-
-    private let profileImageContainer = UIView()
     private let profileImageView = UIImageView()
-    private let editImageButton = UIButton(type: .system)
-
     private let nameLabel = UILabel()
     private let emailLabel = UILabel()
     private let editProfileButton = UIButton(type: .system)
-
-    private let statsStackH = UIStackView()
 
     // MARK: - Sections & Items
     private enum Section: Int, CaseIterable {
@@ -32,39 +22,44 @@ class ProfileViewController: UIViewController {
         case preferences
         case privacy
         case about
+        case logout
 
-        var title: String {
+        var title: String? {
             switch self {
             case .account: return "Account"
             case .preferences: return "Preferences"
             case .privacy: return "Privacy & Security"
             case .about: return "About"
+            case .logout: return nil
             }
         }
     }
 
-    private let items: [Section: [(icon: String, title: String)]] = [
+    private let items: [Section: [(icon: String, title: String, isDestructive: Bool)]] = [
         .account: [
-            ("person.crop.circle", "My Profile"),
-            ("envelope.fill", "Email & Password")
+            ("person.crop.circle", "My Profile", false),
+            ("envelope.fill", "Email & Password", false),
         ],
         .preferences: [
-            ("paintbrush.fill", "Appearance"),
-            ("bell.badge.fill", "Notifications"),
-            ("bookmark.fill", "Saved Items")
+            ("paintbrush.fill", "Appearance", false),
+            ("bell.badge.fill", "Notifications", false),
         ],
         .privacy: [
-            ("lock.fill", "Privacy Controls"),
-            ("hand.raised.fill", "Permissions"),
-            ("key.fill", "Security")
+            ("lock.fill", "Privacy Controls", false),
+            ("hand.raised.fill", "Permissions", false),
+            // ("key.fill", "Security", false),
         ],
         .about: [
-            ("info.circle.fill", "App Info"),
-            ("doc.text.fill", "Terms of Service"),
-            ("shield.lefthalf.filled", "Privacy Policy")
-        ]
+            ("info.circle.fill", "App Info", false),
+            ("doc.text.fill", "Terms of Service", false),
+            ("shield.lefthalf.filled", "Privacy Policy", false),
+        ],
+        .logout: [
+            ("rectangle.portrait.and.arrow.right", "Sign Out", true)
+        ],
     ]
 
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Profile"
@@ -73,6 +68,7 @@ class ProfileViewController: UIViewController {
 
         setupTable()
         setupProfileHeader()
+        setupFooter()
         tableView.tableHeaderView = profileHeaderView
     }
 
@@ -81,37 +77,36 @@ class ProfileViewController: UIViewController {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.delegate = self
         tableView.dataSource = self
-
         tableView.register(ProfileCell.self, forCellReuseIdentifier: "SettingsCell")
-        
+
         view.addSubview(tableView)
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
     }
 
     // MARK: - Profile Header Setup
     private func setupProfileHeader() {
-        profileHeaderView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 280)
+        profileHeaderView.frame = CGRect(x: 0, y: 0, width: view.frame.width, height: 260)
 
         let container = UIStackView()
         container.axis = .vertical
         container.alignment = .center
-        container.spacing = 16
+        container.spacing = 12
         container.translatesAutoresizingMaskIntoConstraints = false
         profileHeaderView.addSubview(container)
 
         NSLayoutConstraint.activate([
             container.topAnchor.constraint(equalTo: profileHeaderView.topAnchor, constant: 20),
             container.leadingAnchor.constraint(equalTo: profileHeaderView.leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: profileHeaderView.trailingAnchor)
+            container.trailingAnchor.constraint(equalTo: profileHeaderView.trailingAnchor),
         ])
 
-        // MARK: - Profile Image (simple, no gradient, no camera button)
+        // Profile Image
         profileImageView.translatesAutoresizingMaskIntoConstraints = false
         profileImageView.image = UIImage(systemName: "person.crop.circle.fill")
         profileImageView.tintColor = .systemGray4
@@ -122,8 +117,8 @@ class ProfileViewController: UIViewController {
         container.addArrangedSubview(profileImageView)
 
         NSLayoutConstraint.activate([
-            profileImageView.widthAnchor.constraint(equalToConstant: 120),
-            profileImageView.heightAnchor.constraint(equalToConstant: 120)
+            profileImageView.widthAnchor.constraint(equalToConstant: 110),
+            profileImageView.heightAnchor.constraint(equalToConstant: 110),
         ])
 
         // MARK: - Name & Email
@@ -137,10 +132,10 @@ class ProfileViewController: UIViewController {
         container.addArrangedSubview(nameLabel)
         container.addArrangedSubview(emailLabel)
 
-        // MARK: - Edit Profile Button
+        // Edit Profile Button
         editProfileButton.setTitle("Edit Profile", for: .normal)
         editProfileButton.backgroundColor = AppColors.accent
-        editProfileButton.tintColor = .white
+        editProfileButton.setTitleColor(.white, for: .normal)
         editProfileButton.layer.cornerRadius = 10
         editProfileButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
         editProfileButton.translatesAutoresizingMaskIntoConstraints = false
@@ -150,36 +145,61 @@ class ProfileViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             editProfileButton.widthAnchor.constraint(equalToConstant: 200),
-            editProfileButton.heightAnchor.constraint(equalToConstant: 44)
+            editProfileButton.heightAnchor.constraint(equalToConstant: 44),
         ])
     }
 
-    private func makeStat(title: String, value: String) -> UIView {
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 3
+    // Logout
+    private func handleLogout() {
+        let alert = UIAlertController(
+            title: "Sign Out",
+            message: "Are you sure you want to sign out?",
+            preferredStyle: .alert
+        )
 
-        let valLabel = UILabel()
-        valLabel.text = value
-        valLabel.font = .boldSystemFont(ofSize: 18)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(
+            UIAlertAction(title: "Sign Out", style: .destructive) { [weak self] _ in
+                self?.performLogout()
+            })
 
-        let titleLabel = UILabel()
-        titleLabel.text = title
-        titleLabel.font = .systemFont(ofSize: 12)
-        titleLabel.textColor = .secondaryLabel
-
-        stack.addArrangedSubview(valLabel)
-        stack.addArrangedSubview(titleLabel)
-
-        return stack
+        present(alert, animated: true)
     }
 
-    private func makeDivider() -> UIView {
-        let divider = UIView()
-        divider.backgroundColor = .systemGray6
-        divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        return divider
+    private func performLogout() {
+        // UserManager.shared.logout()
+        print("perform logout")
+        print("navigating to login screen")
+
+        // Navigate back to login
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let sceneDelegate = scene.delegate as? SceneDelegate
+        {
+            sceneDelegate.switchToLogin()
+        }
+    }
+
+    // MARK: - Footer
+    private func setupFooter() {
+        let footer = UIView(frame: CGRect(x: 0, y: 0, width: view.frame.width, height: 60))
+
+        let versionLabel = UILabel()
+        versionLabel.translatesAutoresizingMaskIntoConstraints = false
+        versionLabel.textAlignment = .center
+        versionLabel.font = .systemFont(ofSize: 12)
+        versionLabel.textColor = .tertiaryLabel
+
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        versionLabel.text = "Version \(version) (\(build))"
+
+        footer.addSubview(versionLabel)
+        NSLayoutConstraint.activate([
+            versionLabel.centerXAnchor.constraint(equalTo: footer.centerXAnchor),
+            versionLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+        ])
+
+        tableView.tableFooterView = footer
     }
 
     @objc private func editProfileTapped() {
@@ -209,14 +229,17 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-
         let section = Section(rawValue: indexPath.section)!
         let item = items[section]![indexPath.row]
 
         let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath) as! ProfileCell
+        cell.configure(icon: item.icon, title: item.title, isDestructive: item.isDestructive)
 
-        cell.configure(icon: item.icon, title: item.title)
-        cell.accessoryType = .disclosureIndicator
+        if section == .logout {
+            cell.accessoryType = .none
+        } else {
+            cell.accessoryType = .disclosureIndicator
+        }
 
         return cell
     }
@@ -227,10 +250,39 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
         let section = Section(rawValue: indexPath.section)!
         let item = items[section]![indexPath.row]
 
-        if section == .preferences && item.title == "Appearance" {
-            let vc = AppearanceViewController()
-            navigationController?.pushViewController(vc, animated: true)
-            return
+        switch (section, item.title) {
+        case (.account, "My Profile"):
+            editProfileTapped()
+
+        case (.account, "Email & Password"):
+            navigationController?.pushViewController(EmailPasswordViewController(), animated: true)
+
+        case (.preferences, "Appearance"):
+            navigationController?.pushViewController(AppearanceViewController(), animated: true)
+
+        case (.preferences, "Notifications"):
+            navigationController?.pushViewController(NotificationsViewController(), animated: true)
+
+        case (.privacy, "Privacy Controls"):
+            navigationController?.pushViewController(PrivacyControlsViewController(), animated: true)
+
+        case (.privacy, "Permissions"):
+            navigationController?.pushViewController(PermissionsViewController(), animated: true)
+
+        case (.about, "App Info"):
+            navigationController?.pushViewController(AppInfoViewController(), animated: true)
+
+        case (.about, "Terms of Service"):
+            navigationController?.pushViewController(TermsViewController(), animated: true)
+
+        case (.about, "Privacy Policy"):
+            navigationController?.pushViewController(PrivacyPolicyViewController(), animated: true)
+
+        case (.logout, _):
+            handleLogout()
+
+        default:
+            break
         }
 
         print("Tapped:", item.title)
