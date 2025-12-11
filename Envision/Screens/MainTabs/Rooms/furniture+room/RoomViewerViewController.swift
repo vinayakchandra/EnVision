@@ -21,7 +21,6 @@ final class RoomViewerViewController: UIViewController {
     private var cameraDistance: Float = 1.5
     private var controlPanel: FurnitureControlPanel?
 
-
     // MARK: - Init
     init(roomURL: URL) {
         self.roomURL = roomURL
@@ -36,6 +35,7 @@ final class RoomViewerViewController: UIViewController {
         super.viewDidLoad()
         title = "Room Viewer"
         navigationController?.navigationBar.prefersLargeTitles = false
+
         setupLayout()
         setupUI()
         loadRoom()
@@ -44,11 +44,10 @@ final class RoomViewerViewController: UIViewController {
     // MARK: - Layout
     private func setupLayout() {
         objectView.translatesAutoresizingMaskIntoConstraints = false
-        objectView.cameraMode = .nonAR    // No AR
-
+        objectView.cameraMode = .nonAR
         objectView.environment.background = .color(.systemGray6)
-        view.addSubview(objectView)
 
+        view.addSubview(objectView)
         NSLayoutConstraint.activate([
                                         objectView.topAnchor.constraint(equalTo: view.topAnchor),
                                         objectView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -59,55 +58,80 @@ final class RoomViewerViewController: UIViewController {
 
     // MARK: - UI
     private func setupUI() {
-        // Remove segmented control entirely — nothing added to nav bar
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "plus"),
             style: .plain,
             target: self,
             action: #selector(addFurnitureTapped)
         )
-
         navigationItem.rightBarButtonItem?.tintColor = .systemGreen
     }
 
-    // MARK: - Load Model
+    // MARK: - Load Model (FIXED)
     private func loadRoom() {
         Task {
-            guard let model = try? await ModelEntity(contentsOf: roomURL) else {
-                return
+            let rootEntity = try await Entity.load(contentsOf: roomURL)
+            rootEntity.generateCollisionShapes(recursive: true)
+
+            // Wrap in ModelEntity if needed (RealityKit-compatible)
+            let model: ModelEntity
+            if let m = rootEntity as? ModelEntity {
+                model = m
+            } else {
+                let wrapper = ModelEntity()
+                wrapper.addChild(rootEntity)
+                model = wrapper
             }
-            roomModel = model
-            model.generateCollisionShapes(recursive: true)
+
+            self.roomModel = model
+
+            // FIX 2: Correct mesh detection
+            var meshCount = 0
+            var foundNames: [String] = []
+
+            model.visit { entity in
+                guard entity.components[ModelComponent.self] != nil else { return }
+
+                meshCount += 1
+                let name = entity.name.isEmpty ? "(unnamed)" : entity.name
+                foundNames.append(name)
+
+                let bounds = entity.visualBounds(relativeTo: nil)
+                let size = bounds.extents
+            }
+
+            let isParametric =  foundNames.count > 2
+
+            print("🧱 Found mesh names:", foundNames)
+            print("🔢 Mesh count:", meshCount)
+            print(isParametric ? "✅ PARAMETRIC" : "❌ NOT PARAMETRIC")
+
             setupObjectScene()
         }
     }
 
-    // MARK: - Object Viewer Mode
+    // MARK: - Object Viewer Scene
     private func setupObjectScene() {
-        guard let roomModel else {
-            return
-        }
+        guard let roomModel else { return }
 
         objectView.scene.anchors.removeAll()
 
         let anchor = AnchorEntity(world: .zero)
-        let model = roomModel.clone(recursive: true)
+        let clone = roomModel.clone(recursive: true)
 
-        fitToScreen(model)
-        anchor.addChild(model)
+        fitToScreen(clone)
+        anchor.addChild(clone)
         objectView.scene.addAnchor(anchor)
 
-        setupOrbitCamera(target: model)
+        setupOrbitCamera(target: clone)
         enableOrbitGestures()
     }
 
     private func fitToScreen(_ model: ModelEntity) {
         let bounds = model.visualBounds(relativeTo: nil)
         let maxDim = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
-        guard maxDim > 0 else {
-            return
-        }
-        model.scale = SIMD3(repeating: 0.6 / maxDim)
+        guard maxDim > 0 else { return }
+        model.scale = SIMD3<Float>(repeating: 0.6 / maxDim)
     }
 
     // MARK: - Orbit Camera
@@ -126,6 +150,7 @@ final class RoomViewerViewController: UIViewController {
         objectView.gestureRecognizers?.forEach {
             objectView.removeGestureRecognizer($0)
         }
+
         objectView.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(pan)))
         objectView.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch)))
     }
@@ -148,11 +173,12 @@ final class RoomViewerViewController: UIViewController {
         let x = cameraDistance * cos(cameraPitch) * cos(cameraYaw)
         let y = cameraDistance * sin(cameraPitch)
         let z = cameraDistance * cos(cameraPitch) * sin(cameraYaw)
+
         orbitCamera?.position = [x, y, z]
         orbitCamera?.look(at: .zero, from: orbitCamera!.position, relativeTo: nil)
     }
 
-    // MARK: - Furniture
+    // MARK: - Furniture Management
     @objc private func addFurnitureTapped() {
         let picker = FurniturePicker()
         picker.onModelSelected = { [weak self] url in
@@ -163,9 +189,7 @@ final class RoomViewerViewController: UIViewController {
 
     private func insertFurniture(url: URL) {
         Task {
-            guard let model = try? await ModelEntity(contentsOf: url) else {
-                return
-            }
+            guard let model = try? await ModelEntity(contentsOf: url) else { return }
 
             model.scale = [0.1, 0.1, 0.1]
             model.position = [0, 0, 0]
