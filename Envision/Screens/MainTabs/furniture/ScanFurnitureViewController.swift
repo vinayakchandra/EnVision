@@ -776,9 +776,7 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
 
         // Section 1: Furniture selection
         let url = modelURL(at: indexPath)
-        let arVC = MultiModelARViewController()
-        arVC.loadModel(named: url.lastPathComponent)
-        navigationController?.pushViewController(arVC, animated: true)
+        self.showQuickLook(url: url)
     }
 
     @objc private func chipButtonTapped(_ sender: UIButton) {
@@ -819,10 +817,6 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
                 self?.showQuickLook(url: url)
             }
 
-            let arView = UIAction(title: "View in AR", image: UIImage(systemName: "arkit")) { _ in
-                self?.showInAR(url: url)
-            }
-
             let edit = UIAction(title: "Edit Model", image: UIImage(systemName: "pencil")) { _ in
                 self?.renameModel(at: indexPath, url: url)
             }
@@ -835,7 +829,7 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
                 self?.deleteModel(at: indexPath, url: url)
             }
 
-            return UIMenu(children: [quickLook, arView, edit, share, delete])
+            return UIMenu(children: [quickLook, edit, share, delete])
         }
     }
 
@@ -844,12 +838,6 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
         let preview = QLPreviewController()
         preview.dataSource = self
         present(preview, animated: true)
-    }
-
-    private func showInAR(url: URL) {
-        let arVC = MultiModelARViewController()
-        arVC.loadModel(named: url.lastPathComponent)
-        navigationController?.pushViewController(arVC, animated: true)
     }
 
     private func renameModel(at indexPath: IndexPath, url: URL) {
