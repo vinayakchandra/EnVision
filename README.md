@@ -76,7 +76,7 @@ furniture, creating detailed 3D models that can be viewed in augmented reality.
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/abbinavv/ios--EnVision-Final-repo.git
+git clone https://github.com/vinayakchandra/EnVision.git
 ```
 
 2. Open the project in Xcode:
