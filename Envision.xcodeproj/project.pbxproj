@@ -161,7 +161,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 25.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = ct.Envision;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vinayakchandra.Envision;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -196,7 +196,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 25.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = ct.Envision;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vinayakchandra.Envision;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
