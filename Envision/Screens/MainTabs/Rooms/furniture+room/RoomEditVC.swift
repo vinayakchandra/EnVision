@@ -315,8 +315,16 @@ final class RoomEditVC: UIViewController {
                 attachLabel(to: model, text: name, yOffset: 0.15)
 
             case name.starts(with: "table"):
-                model.model?.materials = [SimpleMaterial(color: .systemPink, roughness: 0.4, isMetallic: true)]
+                model.model?.materials = [SimpleMaterial(color: .systemRed, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.5)
+
+            case name.starts(with: "door"):
+                model.model?.materials = [SimpleMaterial(color: .systemCyan.withAlphaComponent(0.3), roughness: 0.4, isMetallic: false)]
+                attachLabel(to: model, text: name, yOffset: 0.8)
+
+            case name.starts(with: "window"):
+                model.model?.materials = [SimpleMaterial(color: .lightGray.withAlphaComponent(0.3), roughness: 0.4, isMetallic: false)]
+                attachLabel(to: model, text: name, yOffset: 0.4)
 
             default:
                 break
