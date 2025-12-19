@@ -28,6 +28,9 @@ final class RoomEditVC: UIViewController {
     private var cameraYaw: Float = .pi / 4
     private var cameraDistance: Float = 1.5
 
+    // MARK: - Floating Menu
+    private var floatingMenuButton: UIButton!
+
     // MARK: - Views
     private let arView: ARView = {
         let view = ARView(frame: .zero)
@@ -58,7 +61,88 @@ final class RoomEditVC: UIViewController {
         setupLayout()
         setupNavigation()
         setupGestures()
+        setupFloatingMenu()
         loadRoom()
+    }
+
+    // MARK: - Floating Menu
+    private func setupFloatingMenu() {
+        let button = UIButton(type: .system)
+
+        var config = UIButton.Configuration.filled()
+        config.image = UIImage(systemName: "pencil",     withConfiguration: UIImage.SymbolConfiguration(pointSize: 26, weight: .medium))
+        config.cornerStyle = .capsule
+        config.baseBackgroundColor = .systemBlue
+        config.baseForegroundColor = .white
+
+        button.configuration = config
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.25
+        button.layer.shadowRadius = 6
+        button.layer.shadowOffset = CGSize(width: 0, height: 4)
+
+        button.showsMenuAsPrimaryAction = true
+        button.menu = makeFloatingMenu()
+
+        view.addSubview(button)
+        floatingMenuButton = button
+
+        NSLayoutConstraint.activate([
+            button.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            button.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            button.widthAnchor.constraint(equalToConstant: 56),
+            button.heightAnchor.constraint(equalToConstant: 56),
+        ])
+    }
+
+    private func makeFloatingMenu() -> UIMenu {
+
+        let labelsAction = UIAction(
+            title: "Show Labels",
+            image: UIImage(systemName: "tag"),
+            state: showLabels ? .on : .off
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.showLabels.toggle()
+            self.labels.values.forEach { $0.isEnabled = self.showLabels }
+            self.refreshFloatingMenu()
+        }
+
+        let colorsAction = UIAction(
+            title: "Enable Colors",
+            image: UIImage(systemName: "paintpalette"),
+            state: enableColors ? .on : .off
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.enableColors.toggle()
+            if let model = self.displayedModel {
+                self.applyMaterialRules(to: model)
+            }
+            self.refreshFloatingMenu()
+        }
+
+        let resetAction = UIAction(
+            title: "Reset",
+            image: UIImage(systemName: "arrow.counterclockwise"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.showLabels = false
+            self.enableColors = false
+            self.labels.values.forEach { $0.isEnabled = false }
+            if let model = self.displayedModel {
+                self.applyMaterialRules(to: model)
+            }
+            self.refreshFloatingMenu()
+        }
+
+        return UIMenu(children: [resetAction, labelsAction, colorsAction]) // ending is first
+    }
+
+    private func refreshFloatingMenu() {
+        floatingMenuButton.menu = makeFloatingMenu()
     }
 
     // MARK: - Layout
@@ -124,9 +208,6 @@ final class RoomEditVC: UIViewController {
             }
         }
         isParametricModel = meshCount > 2
-        if isParametricModel {
-            setupParametricControls()
-        }
     }
 
     // MARK: - Scene
@@ -200,52 +281,6 @@ final class RoomEditVC: UIViewController {
             joystick.widthAnchor.constraint(equalToConstant: 120),
             joystick.heightAnchor.constraint(equalToConstant: 120),
         ])
-    }
-
-    // MARK: - Parametric UI
-    private func setupParametricControls() {
-        let labelSwitch = UISwitch()
-        let colorSwitch = UISwitch()
-
-        labelSwitch.addTarget(self, action: #selector(toggleLabels(_:)), for: .valueChanged)
-        colorSwitch.addTarget(self, action: #selector(toggleColors(_:)), for: .valueChanged)
-
-        let stack = UIStackView(arrangedSubviews: [
-            labeledRow("Show Labels", labelSwitch),
-            labeledRow("Enable Colors", colorSwitch),
-        ])
-
-        stack.axis = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        view.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-        ])
-    }
-
-    private func labeledRow(_ title: String, _ control: UISwitch) -> UIStackView {
-        let label = UILabel()
-        label.text = title
-        label.textColor = .label
-        let row = UIStackView(arrangedSubviews: [control, label])
-        row.spacing = 8
-        return row
-    }
-
-    @objc private func toggleLabels(_ sender: UISwitch) {
-        showLabels = sender.isOn
-        labels.values.forEach { $0.isEnabled = showLabels }
-    }
-
-    @objc private func toggleColors(_ sender: UISwitch) {
-        enableColors = sender.isOn
-        if let model = displayedModel {
-            applyMaterialRules(to: model)
-        }
     }
 
     // MARK: - Materials & Labels
