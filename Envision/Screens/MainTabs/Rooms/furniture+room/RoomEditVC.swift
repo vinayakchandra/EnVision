@@ -285,21 +285,24 @@ final class RoomEditVC: UIViewController {
 
     // MARK: - Materials & Labels
     private func applyMaterialRules(to root: Entity) {
+        var entitiesFound:[String] = []
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
 
+            // Cache original materials once
             if originalMaterials[model] == nil {
                 originalMaterials[model] = model.model?.materials
             }
 
+            // 🔴 Enable Colors OFF → force everything white
             guard enableColors else {
-                if let original = originalMaterials[model] {
-                    model.model?.materials = original
-                }
+                model.model?.materials = [SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)]
                 return
             }
 
+            // 🟢 Enable Colors ON → apply semantic colors
             let name = model.name.lowercased()
+            entitiesFound.append(name)
 
             switch true {
             case name.starts(with: "wall"):
@@ -327,9 +330,14 @@ final class RoomEditVC: UIViewController {
                 attachLabel(to: model, text: name, yOffset: 0.4)
 
             default:
-                break
+                // break
+                // fallback → original materials
+                if let original = originalMaterials[model] {
+                    model.model?.materials = original
+                }
             }
         }
+        // print(entitiesFound)
     }
 
     private func attachLabel(to entity: Entity, text: String, yOffset: Float) {
