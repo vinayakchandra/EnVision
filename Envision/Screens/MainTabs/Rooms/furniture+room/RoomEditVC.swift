@@ -1,6 +1,18 @@
 import RealityKit
 import UIKit
 
+enum ColorTarget {
+    case walls
+    case doors
+    case tables
+    case floors
+    case windows
+    case storage
+    case selected
+}
+
+private var colorTarget: ColorTarget = .selected
+
 // MARK: - RoomEditVC
 final class RoomEditVC: UIViewController {
 
@@ -98,16 +110,44 @@ final class RoomEditVC: UIViewController {
     }
 
     private func makeFloatingMenu() -> UIMenu {
+        let changeColorMenu = UIMenu(
+            title: "Change Color",
+            image: UIImage(systemName: "paintbrush.pointed"),
+            children: [
+                UIAction(title: "Walls", image: UIImage(systemName: "square.on.square")) { [weak self] _ in
+                    self?.presentColorPicker(for: .walls)
+                },
+
+                UIAction(title: "Doors", image: UIImage(systemName: "door.left.hand.open")) { [weak self] _ in
+                    self?.presentColorPicker(for: .doors)
+                },
+
+                UIAction(title: "Tables", image: UIImage(systemName: "table.furniture")) { [weak self] _ in
+                    self?.presentColorPicker(for: .tables)
+                },
+
+                UIAction(title: "Floors", image: UIImage(systemName: "square.grid.3x3")) { [weak self] _ in
+                    self?.presentColorPicker(for: .floors)
+                },
+
+                UIAction(title: "Windows", image: UIImage(systemName: "window.vertical.closed")) { [weak self] _ in
+                    self?.presentColorPicker(for: .windows)
+                },
+
+                UIAction(title: "Storage", image: UIImage(systemName: "archivebox")) { [weak self] _ in
+                    self?.presentColorPicker(for: .storage)
+                },
+            ]
+        )
 
         let labelsAction = UIAction(
             title: "Show Labels",
             image: UIImage(systemName: "tag"),
             state: showLabels ? .on : .off
         ) { [weak self] _ in
-            guard let self else { return }
-            self.showLabels.toggle()
-            self.labels.values.forEach { $0.isEnabled = self.showLabels }
-            self.refreshFloatingMenu()
+            self?.showLabels.toggle()
+            self?.labels.values.forEach { $0.isEnabled = self?.showLabels ?? false }
+            self?.refreshFloatingMenu()
         }
 
         let colorsAction = UIAction(
@@ -138,7 +178,7 @@ final class RoomEditVC: UIViewController {
             self.refreshFloatingMenu()
         }
 
-        return UIMenu(children: [resetAction, labelsAction, colorsAction]) // ending is first
+        return UIMenu(children: [resetAction, changeColorMenu, labelsAction, colorsAction]) // ending is first
     }
 
     private func refreshFloatingMenu() {
@@ -329,6 +369,10 @@ final class RoomEditVC: UIViewController {
                 model.model?.materials = [SimpleMaterial(color: .lightGray.withAlphaComponent(0.3), roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.4)
 
+            case name.starts(with: "storage"):
+                model.model?.materials = [SimpleMaterial(color: .systemOrange, roughness: 0.4, isMetallic: false)]
+                attachLabel(to: model, text: name, yOffset: 0.4)
+
             default:
                 // break
                 // fallback → original materials
@@ -338,6 +382,58 @@ final class RoomEditVC: UIViewController {
             }
         }
         // print(entitiesFound)
+    }
+
+    private func setColorForAllWalls(_ color: UIColor) {
+        guard let root = displayedModel else { return }
+
+        root.visit {
+            guard let model = $0 as? ModelEntity else { return }
+            let name = model.name.lowercased()
+
+            if name.starts(with: "wall") {
+                model.model?.materials = [
+                    SimpleMaterial(
+                        color: color,
+                        roughness: 0.4,
+                        isMetallic: false
+                    )
+                ]
+            }
+        }
+    }
+    private func setColor(for target: ColorTarget, color: UIColor) {
+        guard let root = displayedModel else { return }
+
+        let prefixes: [ColorTarget: String] = [
+            .walls: "wall",
+            .doors: "door",
+            .tables: "table",
+            .floors: "floor",
+            .windows: "window",
+            .storage: "storage"
+        ]
+
+        guard let prefix = prefixes[target] else { return }
+
+        root.visit {
+            guard let model = $0 as? ModelEntity else { return }
+            if model.name.lowercased().starts(with: prefix) {
+                model.model?.materials = [
+                    SimpleMaterial(
+                        color: color,
+                        roughness: 0.4,
+                        isMetallic: false
+                    )
+                ]
+            }
+        }
+    }
+    private func presentColorPicker(for target: ColorTarget) {
+        colorTarget = target
+        let picker = UIColorPickerViewController()
+        picker.delegate = self
+        present(picker, animated: true)
     }
 
     private func attachLabel(to entity: Entity, text: String, yOffset: Float) {
@@ -418,8 +514,15 @@ final class RoomEditVC: UIViewController {
 // MARK: - Color Picker
 extension RoomEditVC: UIColorPickerViewControllerDelegate {
     func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController) {
-        selectedModel?.model?.materials = [
-            SimpleMaterial(color: viewController.selectedColor, roughness: 0.4, isMetallic: false)
-        ]
+
+        switch colorTarget {
+        case .selected:
+            selectedModel?.model?.materials = [
+                SimpleMaterial(color: viewController.selectedColor, roughness: 0.4, isMetallic: false)
+            ]
+
+        default:
+            setColor(for: colorTarget, color: viewController.selectedColor)
+        }
     }
 }
