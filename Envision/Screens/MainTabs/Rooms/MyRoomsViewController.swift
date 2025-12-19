@@ -655,7 +655,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
 
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             UIMenu(children: [
-                UIAction(title: "Quick Look", image: UIImage(systemName: "eye")) { _ in
+                UIAction(title: "View in AR", image: UIImage(systemName: "arkit")) { _ in
                     self?.quickLook(url: url)
                 },
                 UIAction(title: "Edit Category", image: UIImage(systemName: "tag")) { _ in
