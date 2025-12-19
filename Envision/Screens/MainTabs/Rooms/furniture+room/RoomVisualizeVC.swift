@@ -170,6 +170,25 @@ final class RoomVisualizeVC: UIViewController {
             arView.scene.addAnchor(anchor)
 
             placedFurniture.append(model)
+            showControls(for: model)
         }
+    }
+
+    private func showControls(for model: ModelEntity) {
+        controlPanel?.removeFromSuperview()
+
+        let panel = FurnitureControlPanel()
+        panel.attach(to: model)
+        panel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(panel)
+        controlPanel = panel
+
+        NSLayoutConstraint.activate([
+                                        panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                                        panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                                        panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+                                        panel.heightAnchor.constraint(equalToConstant: 170),
+                                    ])
     }
 }
