@@ -131,8 +131,8 @@ Envision/
 
 ## 👥 Contributors
 
-- **Vinayak** - Lead Developer
 - **Abbinav** - Lead Developer
+- **Vinayak** - Lead Developer
 
 ## 🙏 Acknowledgments
 
