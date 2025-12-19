@@ -26,7 +26,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let style: UIUserInterfaceStyle
 
         if let saved = UserDefaults.standard.object(forKey: "selectedTheme") as? Int {
-            style = saved == 0 ? .light : .dark
+            switch saved {
+            case 0:
+                style = .light
+            case 1:
+                style = .dark
+            default:
+                style = .unspecified // System
+            }
         } else {
             style = .unspecified // system mode on first launch
         }
