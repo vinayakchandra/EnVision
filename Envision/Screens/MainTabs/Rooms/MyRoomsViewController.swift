@@ -25,6 +25,7 @@ final class MyRoomsViewController: UIViewController {
     var selectedCategory: RoomCategory?
     var selectedRoomType: RoomType?
     let thumbnailCache = NSCache<NSURL, UIImage>()
+    var isSelectionMode = false
 
     private var isSearching: Bool {
         guard let text = searchController.searchBar.text else { return false }
@@ -93,7 +94,7 @@ final class MyRoomsViewController: UIViewController {
 
     private func makeMenu() -> UIMenu {
         UIMenu(children: [
-            UIAction(title: "Select Multiple", image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
+            UIAction(title: "Select Rooms", image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
                 self?.enableMultipleSelection()
             },
             UIAction(title: "Delete All", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
@@ -249,15 +250,42 @@ final class MyRoomsViewController: UIViewController {
     }
 
     private func enableMultipleSelection() {
+        isSelectionMode = true
         collectionView.allowsMultipleSelection = true
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(disableMultipleSelection))
-        navigationItem.rightBarButtonItems = [UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelectedRooms))]
+
+        // Show circles on visible cells
+        collectionView.visibleCells
+        .compactMap { $0 as? RoomCell }
+        .forEach { $0.setSelectionMode(true, animated: true) }
+
+        let deleteButton = UIBarButtonItem(
+            image: UIImage(systemName: "trash"),
+            style: .plain,
+            target: self,
+            action: #selector(deleteSelectedRooms)
+        )
+        deleteButton.tintColor = .systemRed
+
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Done", style: .prominent, target: self, action: #selector(disableMultipleSelection))
+        navigationItem.rightBarButtonItems = [deleteButton]
+        // navigationItem.rightBarButtonItems = [UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelectedRooms))]
+
         showToast(message: "Tap rooms to select, then tap delete")
     }
 
     @objc private func disableMultipleSelection() {
+        isSelectionMode = false
         collectionView.allowsMultipleSelection = false
-        collectionView.indexPathsForSelectedItems?.forEach { collectionView.deselectItem(at: $0, animated: true) }
+
+        // Hide circles
+        collectionView.visibleCells
+        .compactMap { $0 as? RoomCell }
+        .forEach { $0.setSelectionMode(false, animated: true) }
+
+        // Clear selection
+        collectionView.indexPathsForSelectedItems?
+            .forEach { collectionView.deselectItem(at: $0, animated: false) }
+
         setupNavigationBar()
     }
 

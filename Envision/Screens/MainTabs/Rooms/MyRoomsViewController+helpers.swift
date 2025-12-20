@@ -43,12 +43,15 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
             cell.button.addTarget(self, action: #selector(chipTapped(_:)), for: .touchUpInside)
             return cell
         } else {
-            // Room cell - UPDATED VERSION WITH BADGES
+            // Room cell
             let url = displayFiles[indexPath.item]
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: RoomCell.reuseID, for: indexPath) as! RoomCell
+
+            // ✅ ADD THIS LINE (IMPORTANT)
+            cell.setSelectionMode(isSelectionMode, animated: false)
+
             let metadata = loadMetadata(for: url)
 
-            // Configure with metadata for badge display
             cell.configure(
                 fileName: url.lastPathComponent,
                 size: fileSizeString(for: url),
@@ -59,11 +62,11 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
 
             generateThumbnail(for: url) { [weak self] image in
                 guard let self = self,
-                    let cell = self.collectionView.cellForItem(at: indexPath) as? RoomCell
+                      let cell = self.collectionView.cellForItem(at: indexPath) as? RoomCell
                 else { return }
+
                 let metadata = self.loadMetadata(for: url)
 
-                // Update with thumbnail and metadata
                 cell.configure(
                     fileName: url.lastPathComponent,
                     size: self.fileSizeString(for: url),
@@ -77,8 +80,12 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
         }
     }
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        guard indexPath.section == 1, !collectionView.allowsMultipleSelection else { return }
 
+        // MULTI-SELECTION MODE → just select
+        if isSelectionMode { return }
+
+        // NORMAL MODE → open room
+        guard indexPath.section == 1 else { return }
         let url = displayFiles[indexPath.item]
         navigationController?.pushViewController(RoomViewerViewController(roomURL: url), animated: true)
     }
