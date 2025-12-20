@@ -99,9 +99,6 @@ final class MyRoomsViewController: UIViewController {
             UIAction(title: "Delete All", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
                 self?.confirmDeleteAll()
             },
-            UIAction(title: "Visualize furniture", image: UIImage(systemName: "arkit")) { [weak self] _ in
-                self?.showARViewController()
-            }
         ])
     }
 
@@ -273,10 +270,6 @@ final class MyRoomsViewController: UIViewController {
         showConfirmation(title: "Delete \(selected.count) Room(s)?", message: "This action cannot be undone.") { [weak self] in
             self?.performBatchDelete(selected.map { self?.displayFiles[$0.item] }.compactMap { $0 })
         }
-    }
-
-    @objc private func showARViewController() {
-        navigationController?.pushViewController(RoomFurniture(), animated: true)
     }
 
     private func confirmDeleteAll() {
