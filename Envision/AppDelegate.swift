@@ -6,19 +6,31 @@
 //
 
 import UIKit
+import TipKit
 
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
 
-    import UIKit
-
-    @main
-    class AppDelegate: UIResponder, UIApplicationDelegate {
-
-        func application(
-            _ application: UIApplication,
-            didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-        ) -> Bool {
-            return true
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) -> Bool {
+        
+        // REQUIRED: Initialize TipKit (iOS 17.0+)
+        if #available(iOS 17.0, *) {
+            do {
+                try Tips.configure([
+                    .displayFrequency(.immediate),
+                    .datastoreLocation(.applicationDefault)
+                ])
+                print(" TipKit configured successfully")
+            } catch {
+                print(" TipKit configuration failed: \(error)")
+            }
         }
+        
+        return true
+    }
 
         // Required for SceneDelegate lifecycle
         func application(_ application: UIApplication,

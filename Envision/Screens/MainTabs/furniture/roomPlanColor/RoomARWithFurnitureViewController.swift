@@ -165,7 +165,7 @@ func replaceEntities(prefix: String, in root: Entity, with modelName: String, sc
             let originalTransform = entity.transformMatrix(relativeTo: parent)
 
             guard let newModel = try? Entity.load(named: modelName) else {
-                print("❌ Failed to load:", modelName)
+                print(" Failed to load:", modelName)
                 return
             }
 

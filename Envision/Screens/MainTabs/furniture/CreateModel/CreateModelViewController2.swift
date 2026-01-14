@@ -59,24 +59,24 @@ class CreateModelViewController2: UIViewController {
                     for try await output in session.outputs {
                         switch output {
                         case .processingComplete:
-                            print("✔ Processing Completed")
+                            print(" Processing Completed")
 
                         case .requestError(let id, let error):
-                            print("❌ Error in request \(id): \(error.localizedDescription)")
+                            print(" Error in request \(id): \(error.localizedDescription)")
 
                         case .requestProgress(let id, let progress):
                             let percent = Int(progress * 100)
-                            print("⏳ Progress (\(id)): \(percent)%")
+                            print(" Progress (\(id)): \(percent)%")
 
                         case .requestComplete(let id, let result):
-                            print("🎉 Request \(id) completed: \(result)")
+                            print(" Request \(id) completed: \(result)")
 
                         default:
                             break
                         }
                     }
                 } catch {
-                    print("❌ Session failed: \(error)")
+                    print(" Session failed: \(error)")
                 }
             }
 
@@ -84,7 +84,7 @@ class CreateModelViewController2: UIViewController {
             try session.process(requests: [request])
 
         } catch {
-            print("❌ Couldn't create PhotogrammetrySession: \(error)")
+            print(" Couldn't create PhotogrammetrySession: \(error)")
         }
     }
 

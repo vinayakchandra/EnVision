@@ -1089,3 +1089,4 @@ final class FurnitureChipCell: UICollectionViewCell {
         button.setAttributedTitle(attributedString, for: .normal)
     }
 }
+

@@ -55,6 +55,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
             cell.configure(
                 fileName: url.lastPathComponent,
                 size: fileSizeString(for: url),
+                dateText: fileDateString(for: url),
                 thumbnail: nil,
                 category: metadata?.category,
                 roomType: metadata?.roomType
@@ -70,6 +71,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
                 cell.configure(
                     fileName: url.lastPathComponent,
                     size: self.fileSizeString(for: url),
+                    dateText: self.fileDateString(for: url),
                     thumbnail: image,
                     category: metadata?.category,
                     roomType: metadata?.roomType

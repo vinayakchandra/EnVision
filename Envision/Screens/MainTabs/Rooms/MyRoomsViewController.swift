@@ -8,6 +8,8 @@ import RoomPlan
 import QuickLook
 import QuickLookThumbnailing
 import UniformTypeIdentifiers
+import TipKit
+import SwiftUI
 
 final class MyRoomsViewController: UIViewController {
 
@@ -19,6 +21,9 @@ final class MyRoomsViewController: UIViewController {
     private let searchController = UISearchController(searchResultsController: nil)
     private var refreshControl: UIRefreshControl!
     var previewURL: URL!
+    private var emptyStateView: UIView!
+    
+    private var tipHostingController: UIViewController?
 
     // MARK: - Data
     var roomFiles: [URL] = []
@@ -57,12 +62,29 @@ final class MyRoomsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-
+        
         title = "My Rooms"
         // Clean up orphaned metadata
         MetadataManager.shared.cleanupOrphanedMetadata()
 
         loadRoomFiles()
+        
+        if #available(iOS 17.0, *) {
+            setupTips()
+        }
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if #available(iOS 17.0, *) {
+            updateTipParameters()
+            showContextualTip()
+        }
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        dismissTip()
     }
 
     private func setupUI() {
@@ -75,6 +97,7 @@ final class MyRoomsViewController: UIViewController {
         setupCollectionView()
         setupRefreshControl()
         setupLoadingOverlay()
+        setupEmptyState()
     }
 
     private func setupNavigationBar() {
@@ -356,6 +379,7 @@ final class MyRoomsViewController: UIViewController {
                 self.collectionView.reloadData()
                 self.hideLoading()
                 self.refreshControl.endRefreshing()
+                self.updateEmptyState()
             }
         }
     }
@@ -509,6 +533,18 @@ final class MyRoomsViewController: UIViewController {
         return fmt.string(fromByteCount: size.int64Value)
     }
 
+    func fileDateString(for url: URL) -> String {
+        let fm = FileManager.default
+        if let attrs = try? fm.attributesOfItem(atPath: url.path),
+           let date = attrs[.creationDate] as? Date {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return formatter.string(from: date)
+        }
+        return "--"
+    }
+
     // MARK: - UI Helpers
     private func showLoading(_ msg: String) {
         loadingLabel.text = msg
@@ -519,6 +555,64 @@ final class MyRoomsViewController: UIViewController {
     private func hideLoading() {
         loadingOverlay.isHidden = true
         activityIndicator.stopAnimating()
+    }
+
+    // MARK: - Empty State
+    private func setupEmptyState() {
+        emptyStateView = UIView()
+        emptyStateView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateView.isHidden = true
+
+        let iconView = UIImageView()
+        iconView.image = UIImage(systemName: "house")
+        iconView.tintColor = .systemGray3
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = UILabel()
+        titleLabel.text = "No Rooms Yet"
+        titleLabel.font = .boldSystemFont(ofSize: 22)
+        titleLabel.textColor = .label
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let messageLabel = UILabel()
+        messageLabel.text = "Tap the camera icon to scan a room\nor import USDZ files"
+        messageLabel.font = .systemFont(ofSize: 16)
+        messageLabel.textColor = .secondaryLabel
+        messageLabel.textAlignment = .center
+        messageLabel.numberOfLines = 0
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        emptyStateView.addSubview(iconView)
+        emptyStateView.addSubview(titleLabel)
+        emptyStateView.addSubview(messageLabel)
+        view.addSubview(emptyStateView)
+
+        NSLayoutConstraint.activate([
+            emptyStateView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyStateView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyStateView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+            emptyStateView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
+
+            iconView.topAnchor.constraint(equalTo: emptyStateView.topAnchor),
+            iconView.centerXAnchor.constraint(equalTo: emptyStateView.centerXAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 80),
+            iconView.heightAnchor.constraint(equalToConstant: 80),
+
+            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
+
+            messageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            messageLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
+            messageLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
+            messageLabel.bottomAnchor.constraint(equalTo: emptyStateView.bottomAnchor)
+        ])
+    }
+
+    private func updateEmptyState() {
+        emptyStateView.isHidden = !roomFiles.isEmpty
     }
 
     func showToast(message: String) {
@@ -648,5 +742,86 @@ final class ChipCell: UICollectionViewCell {
         ]))
 
         button.setAttributedTitle(attributedString, for: .normal)
+    }
+}
+
+@available(iOS 17.0, *)
+extension MyRoomsViewController {
+    
+    private func setupTips() {
+        // Initial setup if needed
+    }
+    
+    private func updateTipParameters() {
+        MyRoomsIntroTip.hasRooms = !roomFiles.isEmpty
+        RoomActionsMenuTip.roomCount = roomFiles.count
+        RoomCategoriesTip.roomCount = roomFiles.count
+    }
+
+    private func showContextualTip() {
+        dismissTip()
+        
+        var tip: (any Tip)?
+        var edge: TipKit.Edge = .top
+        
+        if roomFiles.isEmpty {
+            tip = MyRoomsIntroTip()
+            edge = .top
+        } else if roomFiles.count == 1 {
+            tip = RoomImportTip()
+            edge = .top
+        } else if roomFiles.count >= 2 {
+            tip = RoomCategoriesTip()
+            edge = .bottom
+        }
+        
+        guard let tipToDisplay = tip else { return }
+        
+        let actionHandler: (Tip.Action) -> Void = { [weak self] action in
+            self?.handleTipAction(action)
+        }
+        
+        let tipView = TipView(tipToDisplay, arrowEdge: edge) { action in
+            actionHandler(action)
+        }
+        
+        let hostingController = UIHostingController(rootView: tipView)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        hostingController.view.backgroundColor = UIColor.clear
+        
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+        self.tipHostingController = hostingController
+        
+        NSLayoutConstraint.activate([
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
+        ])
+        
+        if tipToDisplay is MyRoomsIntroTip || tipToDisplay is RoomImportTip {
+             hostingController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8).isActive = true
+        } else if tipToDisplay is RoomCategoriesTip {
+            hostingController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60).isActive = true
+        } else {
+             hostingController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16).isActive = true
+        }
+    }
+    
+    private func dismissTip() {
+        if let existing = tipHostingController {
+            existing.willMove(toParent: nil)
+            existing.view.removeFromSuperview()
+            existing.removeFromParent()
+            tipHostingController = nil
+        }
+    }
+    
+    private func handleTipAction(_ action: Tip.Action) {
+        switch action.id {
+        case "scan": scanTapped(); dismissTip()
+        case "later": dismissTip()
+        default: dismissTip()
+        }
     }
 }

@@ -25,7 +25,7 @@ enum ModelType {
         case .furniture: return "Furniture"
         case .room: return "Room"
         }
-    }
+    } 
 }
 
 struct ModelMetadata: Codable {
@@ -143,7 +143,7 @@ final class SaveManager {
                     completion(true)
                 }
             } catch {
-                print("❌ Error deleting model: \(error)")
+                print("Error deleting model: \(error)")
                 DispatchQueue.main.async {
                     completion(false)
                 }

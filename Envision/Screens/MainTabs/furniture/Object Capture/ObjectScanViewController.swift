@@ -304,7 +304,8 @@ Move the phone slowly around the object
 
     // MARK: - Auto Capture
     private func startAutoCapture() {
-        captureTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+        // Capture every 0.5 seconds for better overlap between photos
+        captureTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             self.takePhoto()
         }
     }
@@ -319,7 +320,7 @@ Move the phone slowly around the object
         let count = images.count
         
         if count < 20 {
-            qualityIndicator.text = "⚠️ Keep capturing"
+            qualityIndicator.text = " Keep capturing"
             qualityIndicator.textColor = .systemYellow
             qualityIndicator.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.2)
             stopButton.isEnabled = false
@@ -332,17 +333,17 @@ Move the phone slowly around the object
             stopButton.alpha = 1.0
             guidanceLabel.text = "Good! Continue for better quality"
         } else if count < 50 {
-            qualityIndicator.text = "✓✓ Good coverage"
+            qualityIndicator.text = " Good coverage"
             qualityIndicator.textColor = .systemGreen
             qualityIndicator.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.3)
             guidanceLabel.text = "Excellent! Almost there..."
         } else if count < 80 {
-            qualityIndicator.text = "✓✓✓ Excellent!"
+            qualityIndicator.text = " Excellent!"
             qualityIndicator.textColor = .systemTeal
             qualityIndicator.backgroundColor = UIColor.systemTeal.withAlphaComponent(0.3)
             guidanceLabel.text = "Perfect coverage! Tap Finish"
         } else {
-            qualityIndicator.text = "🏆 Maximum coverage"
+            qualityIndicator.text = " Maximum coverage"
             qualityIndicator.textColor = .systemPurple
             qualityIndicator.backgroundColor = UIColor.systemPurple.withAlphaComponent(0.3)
             guidanceLabel.text = "Outstanding! Ready to process"
@@ -357,7 +358,7 @@ Move the phone slowly around the object
         // Calculate capture duration
         if let startTime = captureStartTime {
             let duration = Date().timeIntervalSince(startTime)
-            print("📸 Capture completed:")
+            print(" Capture completed:")
             print("   • Photos: \(images.count)")
             print("   • Duration: \(String(format: "%.1f", duration))s")
             print("   • Average: \(String(format: "%.1f", duration / Double(images.count)))s per photo")

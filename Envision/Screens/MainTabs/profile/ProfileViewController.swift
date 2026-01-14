@@ -4,6 +4,7 @@
 //
 
 import UIKit
+import TipKit
 
 class ProfileViewController: UIViewController {
 
@@ -50,6 +51,8 @@ class ProfileViewController: UIViewController {
             // ("key.fill", "Security", false),
         ],
         .about: [
+            ("lightbulb.fill", "Tips & Tutorials", false),
+            ("arrow.counterclockwise", "Restart App Tour", false),
             ("info.circle.fill", "App Info", false),
             ("doc.text.fill", "Terms of Service", false),
             ("shield.lefthalf.filled", "Privacy Policy", false),
@@ -268,6 +271,12 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
 
         case (.privacy, "Permissions"):
             navigationController?.pushViewController(PermissionsViewController(), animated: true)
+            
+        case (.about, "Tips & Tutorials"):
+            navigationController?.pushViewController(TipsLibraryViewController(), animated: true)
+
+        case (.about, "Restart App Tour"):
+            handleRestartTour()
 
         case (.about, "App Info"):
             navigationController?.pushViewController(AppInfoViewController(), animated: true)
@@ -286,5 +295,24 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
         }
 
         print("Tapped:", item.title)
+    }
+    
+    private func handleRestartTour() {
+        let alert = UIAlertController(
+            title: "Restart App Tour?",
+            message: "This will reset all tips and guided tours.",
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Restart", style: .default) { _ in
+            TourManager.shared.resetTour()
+            
+            let confirm = UIAlertController(title: "Tour Reset", message: "The app tour will appear again as you navigate.", preferredStyle: .alert)
+            confirm.addAction(UIAlertAction(title: "OK", style: .default))
+            self.present(confirm, animated: true)
+        })
+        
+        present(alert, animated: true)
     }
 }

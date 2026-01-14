@@ -2,8 +2,6 @@
 //  OnboardingController.swift
 //  Envisionf2
 //
-//  Created by Abishai on 15/11/25.
-//
 
 import UIKit
 

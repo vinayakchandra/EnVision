@@ -169,17 +169,17 @@ final class ObjectCapturePreviewController: UIViewController {
             
             // Quality check
             if photoCount < 20 {
-                statusLabel.text = "⚠️ Low photo count. For best results, capture 30-50 photos"
+                statusLabel.text = " Low photo count. For best results, capture 30-50 photos"
                 statusLabel.textColor = .systemOrange
             } else if photoCount > 100 {
-                statusLabel.text = "✓ Excellent coverage! Ready for high-quality model"
+                statusLabel.text = " Excellent coverage! Ready for high-quality model"
                 statusLabel.textColor = .systemGreen
             } else {
-                statusLabel.text = "✓ Good photo count. Ready to generate"
+                statusLabel.text = " Good photo count. Ready to generate"
                 statusLabel.textColor = .systemGreen
             }
         } catch {
-            print("❌ Error loading images: \(error)")
+            print(" Error loading images: \(error)")
         }
     }
 
@@ -310,14 +310,14 @@ final class ObjectCapturePreviewController: UIViewController {
         // Optimized configuration
         var config = PhotogrammetrySession.Configuration()
         config.sampleOrdering = .sequential
-        config.featureSensitivity = .normal
+        config.featureSensitivity = .high
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            print("🔍 Starting photogrammetry with \(self.photoCount) images")
-            print("📁 Input folder: \(self.imagesFolder.path)")
-            print("💾 Output: \(outputURL.path)")
+            print(" Starting photogrammetry with \(self.photoCount) images")
+            print(" Input folder: \(self.imagesFolder.path)")
+            print(" Output: \(outputURL.path)")
             
             guard let session = try? PhotogrammetrySession(
                 input: self.imagesFolder,
@@ -340,10 +340,10 @@ final class ObjectCapturePreviewController: UIViewController {
                        
 
                         case .processingComplete:
-                            print("✅ Processing complete!")
+                            print(" Processing complete!")
                             
                         case .inputComplete:
-                            print("📥 Input complete")
+                            print(" Input complete")
                             
                         case .requestProgress(let request, let fraction):
                             let percentage = Int(fraction * 100)
@@ -367,7 +367,7 @@ final class ObjectCapturePreviewController: UIViewController {
 
                         case .requestComplete(let request, let result):
                             let elapsed = Date().timeIntervalSince(startTime)
-                            print("✅ Request complete in \(String(format: "%.1f", elapsed))s")
+                            print(" Request complete in \(String(format: "%.1f", elapsed))s")
                             
                             DispatchQueue.main.async {
                                 self.progressView.progress = 1.0
@@ -378,31 +378,31 @@ final class ObjectCapturePreviewController: UIViewController {
                             }
                             
                         case .requestError(let request, let error):
-                            print("❌ Request error: \(error)")
+                            print(" Request error: \(error)")
                             DispatchQueue.main.async {
                                 self.handleError(message: "Processing failed: \(error.localizedDescription)")
                             }
                             
                         case .processingCancelled:
-                            print("⚠️ Processing cancelled")
+                            print(" Processing cancelled")
                             DispatchQueue.main.async {
                                 self.handleError(message: "Processing was cancelled")
                             }
                             
                         case .invalidSample(let id, let reason):
-                            print("⚠️ Invalid sample \(id): \(reason)")
+                            print(" Invalid sample \(id): \(reason)")
                             
                         case .skippedSample(let id):
-                            print("⏭️ Skipped sample: \(id)")
+                            print(" Skipped sample: \(id)")
                             
                         case .automaticDownsampling:
-                            print("📉 Automatic downsampling applied")
+                            print(" Automatic downsampling applied")
                         default:
-                            print("⚠️ Unknown output: \(output)")
+                            print(" Unknown output: \(output)")
                         }
                     }
                 } catch {
-                    print("❌ Task error: \(error)")
+                    print(" Task error: \(error)")
                     DispatchQueue.main.async {
                         self.handleError(message: "An error occurred: \(error.localizedDescription)")
                     }
@@ -412,7 +412,7 @@ final class ObjectCapturePreviewController: UIViewController {
             do {
                 try session.process(requests: [request])
             } catch {
-                print("❌ Process error: \(error)")
+                print(" Process error: \(error)")
                 DispatchQueue.main.async {
                     self.handleError(message: "Failed to start processing: \(error.localizedDescription)")
                 }
@@ -465,7 +465,7 @@ final class ObjectCapturePreviewController: UIViewController {
                 self.generateButton.setTitle("View in My Models", for: .normal)
                 self.generateButton.isEnabled = true
                 
-                print("✅ Model saved to: \(savedURL.path)")
+                print(" Model saved to: \(savedURL.path)")
                 
                 // Auto-navigate after 1.5 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

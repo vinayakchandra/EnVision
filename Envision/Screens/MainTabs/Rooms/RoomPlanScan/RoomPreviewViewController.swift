@@ -95,7 +95,7 @@ final class RoomPreviewViewController: UIViewController {
 
     private let saveButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.setTitle("💾 Save to My Rooms", for: .normal)
+        btn.setTitle("Save to My Rooms", for: .normal)
         btn.setTitle("✓ Saved!", for: .disabled)
         btn.titleLabel?.font = AppFonts.semibold(17)
         btn.backgroundColor = AppColors.accent
@@ -434,9 +434,9 @@ final class RoomPreviewViewController: UIViewController {
                 self.showSuccessAnimation()
 
             case .failure(let error):
-                print("❌ Save error: \(error)")
+                print(" Save error: \(error)")
                 self.saveButton.isEnabled = true
-                self.saveButton.setTitle("💾 Save to My Rooms", for: .normal)
+                self.saveButton.setTitle(" Save to My Rooms", for: .normal)
                 self.showErrorAlert(message: "Failed to save room. Please try again.")
             }
         }

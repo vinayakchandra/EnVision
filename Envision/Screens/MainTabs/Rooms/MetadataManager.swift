@@ -48,15 +48,15 @@ class MetadataManager {
             decoder.dateDecodingStrategy = .iso8601
             let metadata = try decoder.decode(RoomsMetadata.self, from: data)
 
-            print("✅ Loaded metadata with \(metadata.rooms.count) rooms")
+            print(" Loaded metadata with \(metadata.rooms.count) rooms")
             cache = metadata
             return metadata
         } catch {
-            print("❌ Error loading metadata: \(error)")
+            print(" Error loading metadata: \(error)")
             // If file is corrupted, create backup and start fresh
             let backupURL = url.deletingPathExtension().appendingPathExtension("backup.json")
             try? FileManager.default.copyItem(at: url, to: backupURL)
-            print("📦 Created backup at: \(backupURL.lastPathComponent)")
+            print(" Created backup at: \(backupURL.lastPathComponent)")
 
             let empty = RoomsMetadata(version: "1.0", rooms: [:])
             cache = empty
@@ -76,13 +76,13 @@ class MetadataManager {
                 let data = try encoder.encode(metadata)
                 try data.write(to: self.metadataFileURL(), options: .atomic)
 
-                print("✅ Saved metadata with \(metadata.rooms.count) rooms")
+                print(" Saved metadata with \(metadata.rooms.count) rooms")
 
                 DispatchQueue.main.async {
                     self.cache = metadata
                 }
             } catch {
-                print("❌ Error saving metadata: \(error)")
+                print(" Error saving metadata: \(error)")
             }
         }
     }
@@ -96,7 +96,7 @@ class MetadataManager {
         allMetadata.rooms[filename] = metadata
         saveMetadata(allMetadata)
 
-        print("📝 Updated metadata for: \(filename)")
+        print(" Updated metadata for: \(filename)")
     }
 
     func deleteMetadata(for filename: String) {
@@ -104,7 +104,7 @@ class MetadataManager {
         allMetadata.rooms.removeValue(forKey: filename)
         saveMetadata(allMetadata)
 
-        print("🗑️ Deleted metadata for: \(filename)")
+        print(" Deleted metadata for: \(filename)")
     }
 
     func renameMetadata(from oldFilename: String, to newFilename: String) {
@@ -115,7 +115,7 @@ class MetadataManager {
             allMetadata.rooms[newFilename] = metadata
             saveMetadata(allMetadata)
 
-            print("✏️ Renamed metadata: \(oldFilename) → \(newFilename)")
+            print(" Renamed metadata: \(oldFilename) → \(newFilename)")
         }
     }
 
@@ -134,7 +134,7 @@ class MetadataManager {
 
         if beforeCount != afterCount {
             saveMetadata(metadata)
-            print("🧹 Cleaned up \(beforeCount - afterCount) orphaned metadata entries")
+            print(" Cleaned up \(beforeCount - afterCount) orphaned metadata entries")
         }
     }
 
@@ -145,7 +145,7 @@ class MetadataManager {
     // Debug method to print all metadata
     func printAllMetadata() {
         let metadata = loadMetadata()
-        print("📊 Metadata Summary:")
+        print(" Metadata Summary:")
         print("   Total rooms: \(metadata.rooms.count)")
         print("   File location: \(metadataFileURL().path)")
 

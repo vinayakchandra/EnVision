@@ -148,7 +148,7 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
             let entity = try Entity.load(contentsOf: url)
             placeModel(entity)
         } catch {
-            print("❌ Failed to load model:", error)
+            print(" Failed to load model:", error)
         }
     }
 

@@ -20,7 +20,7 @@ import UIKit
 //        self.init(red: r, green: g, blue: b, alpha: a)
 //    }
 //}
-
+//abhinav
 extension UIView {
     func applyGradientBackground(colors: [UIColor]) {
         let gradientLayer = CAGradientLayer()

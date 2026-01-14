@@ -112,7 +112,7 @@ final class UserManager {
             }
             return true
         } catch {
-            print("❌ Failed to save profile image: \(error)")
+            print(" Failed to save profile image: \(error)")
             return false
         }
     }

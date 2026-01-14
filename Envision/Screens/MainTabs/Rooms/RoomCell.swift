@@ -34,6 +34,15 @@ final class RoomCell: UICollectionViewCell {
         return lbl
     }()
 
+    private let dateLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        lbl.font = .systemFont(ofSize: 11, weight: .regular)
+        lbl.textColor = .tertiaryLabel
+        lbl.numberOfLines = 1
+        return lbl
+    }()
+
     private let container: UIView = {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -131,6 +140,7 @@ final class RoomCell: UICollectionViewCell {
         container.addSubview(thumbnailView)
         container.addSubview(titleLabel)
         container.addSubview(sizeLabel)
+        container.addSubview(dateLabel)
 
         thumbnailView.addSubview(categoryBadge)
         thumbnailView.addSubview(roomTypeBadge)
@@ -176,7 +186,12 @@ final class RoomCell: UICollectionViewCell {
             sizeLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
             sizeLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
             sizeLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
-            sizeLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+
+            // Date
+            dateLabel.topAnchor.constraint(equalTo: sizeLabel.bottomAnchor, constant: 2),
+            dateLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            dateLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            dateLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
 
             // RoomType Badge
             roomTypeBadge.topAnchor.constraint(equalTo: thumbnailView.topAnchor, constant: 8),
@@ -237,6 +252,7 @@ final class RoomCell: UICollectionViewCell {
         thumbnailView.image = nil
         titleLabel.text = nil
         sizeLabel.text = nil
+        dateLabel.text = nil
         categoryBadge.isHidden = true
         roomTypeBadge.isHidden = true
         selectionCircle.image = UIImage(systemName: "circle")
@@ -247,12 +263,16 @@ final class RoomCell: UICollectionViewCell {
     func configure(
         fileName: String,
         size: String,
+        dateText: String,
         thumbnail: UIImage?,
         category: RoomCategory? = nil,
         roomType: RoomType? = nil
     ) {
-        titleLabel.text = fileName
+        // Remove extension from fileName
+        let nameWithoutExtension = (fileName as NSString).deletingPathExtension
+        titleLabel.text = nameWithoutExtension
         sizeLabel.text = size
+        dateLabel.text = dateText
         thumbnailView.image = thumbnail ?? UIImage(systemName: "arkit")
 
         categoryBadge.isHidden = true
