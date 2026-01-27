@@ -15,6 +15,9 @@ final class ObjectCapturePreviewController: UIViewController {
     private var isProcessing = false
     private var imageURLs: [URL] = []
     
+    // Background processing
+    private let processor = BackgroundModelProcessor.shared
+    
     private let scrollView: UIScrollView = {
         let sv = UIScrollView()
         sv.translatesAutoresizingMaskIntoConstraints = false
@@ -130,6 +133,69 @@ final class ObjectCapturePreviewController: UIViewController {
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
     }()
+    
+    // Quality selector
+    private let qualitySegment: UISegmentedControl = {
+        let items = ["Fast", "Balanced", "High Quality"]
+        let seg = UISegmentedControl(items: items)
+        seg.selectedSegmentIndex = 0 // Default to Fast
+        seg.translatesAutoresizingMaskIntoConstraints = false
+        return seg
+    }()
+    
+    private let qualityLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.text = "Processing Speed"
+        lbl.font = .systemFont(ofSize: 14, weight: .medium)
+        lbl.textColor = .secondaryLabel
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
+    }()
+    
+    private let qualityDescLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.text = "⚡ Fastest processing, good for quick previews"
+        lbl.font = .systemFont(ofSize: 12)
+        lbl.textColor = .tertiaryLabel
+        lbl.textAlignment = .center
+        lbl.numberOfLines = 0
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
+    }()
+    
+    private let backgroundInfoLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.text = "💡 You can leave this screen - processing continues in background"
+        lbl.font = .systemFont(ofSize: 13, weight: .medium)
+        lbl.textColor = .systemBlue
+        lbl.textAlignment = .center
+        lbl.numberOfLines = 0
+        lbl.alpha = 0
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
+    }()
+    
+    private let cancelButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.setTitle("Cancel Processing", for: .normal)
+        btn.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        btn.setTitleColor(.systemRed, for: .normal)
+        btn.backgroundColor = .systemRed.withAlphaComponent(0.1)
+        btn.layer.cornerRadius = 14
+        btn.isHidden = true
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }()
+    
+    private let timeEstimateLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.font = .systemFont(ofSize: 13)
+        lbl.textColor = .tertiaryLabel
+        lbl.textAlignment = .center
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
+    }()
+    private var selectedDetailLevel: PhotogrammetrySession.Request.Detail = .reduced
 
 
     // MARK: - Init
@@ -147,6 +213,8 @@ final class ObjectCapturePreviewController: UIViewController {
         
         loadImages()
         setupUI()
+        setupQualitySelector()
+        setupBackgroundProcessingCallbacks()
         
         generateButton.addTarget(self, action: #selector(startProcessing), for: .touchUpInside)
         retakeButton.addTarget(self, action: #selector(retakePhotos), for: .touchUpInside)
@@ -154,6 +222,85 @@ final class ObjectCapturePreviewController: UIViewController {
 
         collectionView.delegate = self
         collectionView.dataSource = self
+        
+        // Check if processing is already in progress (user returned to screen)
+        checkExistingProcessing()
+    }
+    
+    // MARK: - Setup Quality Selector
+    private func setupQualitySelector() {
+        qualitySegment.addTarget(self, action: #selector(qualityChanged), for: .valueChanged)
+        updateQualityDescription()
+    }
+    
+    @objc private func qualityChanged() {
+        updateQualityDescription()
+        
+        // Haptic feedback
+        let generator = UISelectionFeedbackGenerator()
+        generator.selectionChanged()
+    }
+    
+    private func updateQualityDescription() {
+        switch qualitySegment.selectedSegmentIndex {
+        case 0: // Fast
+            selectedDetailLevel = .reduced
+            qualityDescLabel.text = " ~30s-1 min • Quick preview quality"
+        case 1: // Balanced
+            selectedDetailLevel = .reduced
+            qualityDescLabel.text = " ~1-3 min • Good balance of speed & quality"
+        case 2: // High Quality
+            selectedDetailLevel = .reduced
+            qualityDescLabel.text = "pl ~3-8 min • Maximum detail & textures"
+        default:
+            break
+        }
+    }
+    
+    // MARK: - Background Processing Callbacks
+    private func setupBackgroundProcessingCallbacks() {
+        // Progress updates
+        processor.onProgressUpdate = { [weak self] progress, status in
+            guard let self = self else { return }
+            self.progressView.setProgress(progress, animated: true)
+            self.progressLabel.text = "\(Int(progress * 100))%"
+            self.statusLabel.text = status
+        }
+        
+        // Completion
+        processor.onCompletion = { [weak self] savedURL in
+            guard let self = self else { return }
+            self.handleProcessingComplete(savedURL: savedURL)
+        }
+        
+        // Error
+        processor.onError = { [weak self] error in
+            guard let self = self else { return }
+            self.handleError(message: error)
+        }
+    }
+    
+    // MARK: - Check Existing Processing
+    private func checkExistingProcessing() {
+        let state = processor.getCurrentState()
+        
+        if state.isProcessing {
+            // Resume UI for ongoing processing
+            isProcessing = true
+            generateButton.isEnabled = false
+            retakeButton.isEnabled = false
+            qualitySegment.isEnabled = false
+            activityIndicator.startAnimating()
+            
+            progressView.isHidden = false
+            progressLabel.isHidden = false
+            progressView.progress = state.progress
+            progressLabel.text = "\(Int(state.progress * 100))%"
+            statusLabel.text = state.status
+            statusLabel.textColor = .label
+            
+            backgroundInfoLabel.alpha = 1
+        }
     }
     
     // MARK: - Load Images
@@ -189,7 +336,9 @@ final class ObjectCapturePreviewController: UIViewController {
         scrollView.addSubview(contentView)
         
         [headerLabel, photoCountLabel, collectionView, statusLabel,
-         progressView, progressLabel, generateButton, retakeButton, activityIndicator, exportButton].forEach {
+         qualityLabel, qualitySegment, qualityDescLabel,
+         progressView, progressLabel, backgroundInfoLabel,
+         generateButton, retakeButton, activityIndicator, exportButton].forEach {
             contentView.addSubview($0)
         }
 
@@ -216,19 +365,35 @@ final class ObjectCapturePreviewController: UIViewController {
             collectionView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             collectionView.heightAnchor.constraint(equalToConstant: 100),
             
-            statusLabel.topAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: 30),
+            statusLabel.topAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: 24),
             statusLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             statusLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             
-            progressView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 16),
+            // Quality selector
+            qualityLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 24),
+            qualityLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            
+            qualitySegment.topAnchor.constraint(equalTo: qualityLabel.bottomAnchor, constant: 8),
+            qualitySegment.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            qualitySegment.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            
+            qualityDescLabel.topAnchor.constraint(equalTo: qualitySegment.bottomAnchor, constant: 8),
+            qualityDescLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            qualityDescLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            
+            progressView.topAnchor.constraint(equalTo: qualityDescLabel.bottomAnchor, constant: 20),
             progressView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
             progressView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
             progressView.heightAnchor.constraint(equalToConstant: 8),
             
             progressLabel.topAnchor.constraint(equalTo: progressView.bottomAnchor, constant: 8),
             progressLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            
+            backgroundInfoLabel.topAnchor.constraint(equalTo: progressLabel.bottomAnchor, constant: 12),
+            backgroundInfoLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            backgroundInfoLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
 
-            generateButton.topAnchor.constraint(equalTo: progressLabel.bottomAnchor, constant: 30),
+            generateButton.topAnchor.constraint(equalTo: backgroundInfoLabel.bottomAnchor, constant: 20),
             generateButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             generateButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
             generateButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
@@ -240,7 +405,7 @@ final class ObjectCapturePreviewController: UIViewController {
             exportButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
             exportButton.heightAnchor.constraint(equalToConstant: 50),
 
-            retakeButton.topAnchor.constraint(equalTo: generateButton.bottomAnchor, constant: 12),
+            retakeButton.topAnchor.constraint(equalTo: exportButton.bottomAnchor, constant: 12),
             retakeButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             retakeButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
             retakeButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
@@ -286,6 +451,7 @@ final class ObjectCapturePreviewController: UIViewController {
         
         generateButton.isEnabled = false
         retakeButton.isEnabled = false
+        qualitySegment.isEnabled = false
         activityIndicator.startAnimating()
         statusLabel.text = "🔄 Preparing photogrammetry session..."
         statusLabel.textColor = .label
@@ -295,187 +461,87 @@ final class ObjectCapturePreviewController: UIViewController {
         progressView.progress = 0
         progressLabel.text = "0%"
         
+        // Show cancel button and background info with animation
+        UIView.animate(withDuration: 0.3) {
+            self.backgroundInfoLabel.alpha = 1
+            self.cancelButton.isHidden = false
+        }
+        
         // Haptic feedback
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
-        // Generate filename with timestamp
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm"
-        let timestamp = dateFormatter.string(from: Date())
-        
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Furniture_\(timestamp).usdz")
-
-        // Optimized configuration
-        var config = PhotogrammetrySession.Configuration()
-        config.sampleOrdering = .sequential
-        config.featureSensitivity = .high
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // Use the background processor for faster, background-capable processing
+        processor.startProcessing(
+            imagesFolder: imagesFolder,
+            detailLevel: selectedDetailLevel
+        ) { [weak self] result in
             guard let self = self else { return }
             
-            print(" Starting photogrammetry with \(self.photoCount) images")
-            print(" Input folder: \(self.imagesFolder.path)")
-            print(" Output: \(outputURL.path)")
-            
-            guard let session = try? PhotogrammetrySession(
-                input: self.imagesFolder,
-                configuration: config
-            ) else {
-                DispatchQueue.main.async {
-                    self.handleError(message: "Failed to create photogrammetry session")
-                }
-                return
+            switch result {
+            case .success(let savedURL):
+                self.handleProcessingComplete(savedURL: savedURL)
+                
+            case .failure(let error):
+                self.handleError(message: error.localizedDescription)
             }
-
-            let request = PhotogrammetrySession.Request.modelFile(url: outputURL)
-            var startTime = Date()
-
-            Task {
-                do {
-                    for try await output in session.outputs {
-                        switch output {
-                        
-                       
-
-                        case .processingComplete:
-                            print(" Processing complete!")
-                            
-                        case .inputComplete:
-                            print(" Input complete")
-                            
-                        case .requestProgress(let request, let fraction):
-                            let percentage = Int(fraction * 100)
-                            
-                            DispatchQueue.main.async {
-                                self.progressView.setProgress(Float(fraction), animated: true)
-                                self.progressLabel.text = "\(percentage)%"
-                                
-                                if percentage < 30 {
-                                    self.statusLabel.text = "🔍 Analyzing images..."
-                                } else if percentage < 70 {
-                                    self.statusLabel.text = "🏗️ Building 3D mesh..."
-                                } else if percentage < 95 {
-                                    self.statusLabel.text = "🎨 Applying textures..."
-                                } else {
-                                    self.statusLabel.text = "✨ Finalizing model..."
-                                }
-                                
-                                print("📊 Progress: \(percentage)%")
-                            }
-
-                        case .requestComplete(let request, let result):
-                            let elapsed = Date().timeIntervalSince(startTime)
-                            print(" Request complete in \(String(format: "%.1f", elapsed))s")
-                            
-                            DispatchQueue.main.async {
-                                self.progressView.progress = 1.0
-                                self.progressLabel.text = "100%"
-                                self.statusLabel.text = "✓ 3D Model Generated!"
-                                self.statusLabel.textColor = .systemGreen
-                                self.saveModel(outputURL)
-                            }
-                            
-                        case .requestError(let request, let error):
-                            print(" Request error: \(error)")
-                            DispatchQueue.main.async {
-                                self.handleError(message: "Processing failed: \(error.localizedDescription)")
-                            }
-                            
-                        case .processingCancelled:
-                            print(" Processing cancelled")
-                            DispatchQueue.main.async {
-                                self.handleError(message: "Processing was cancelled")
-                            }
-                            
-                        case .invalidSample(let id, let reason):
-                            print(" Invalid sample \(id): \(reason)")
-                            
-                        case .skippedSample(let id):
-                            print(" Skipped sample: \(id)")
-                            
-                        case .automaticDownsampling:
-                            print(" Automatic downsampling applied")
-                        default:
-                            print(" Unknown output: \(output)")
-                        }
-                    }
-                } catch {
-                    print(" Task error: \(error)")
-                    DispatchQueue.main.async {
-                        self.handleError(message: "An error occurred: \(error.localizedDescription)")
-                    }
-                }
+        }
+    }
+    
+    // MARK: - Processing Complete Handler
+    private func handleProcessingComplete(savedURL: URL) {
+        activityIndicator.stopAnimating()
+        isProcessing = false
+        cancelButton.isHidden = true
+        
+        progressView.progress = 1.0
+        progressLabel.text = "100%"
+        statusLabel.text = " Model Saved Successfully!"
+        statusLabel.textColor = .systemGreen
+        
+        // Success haptic
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        // Animate success
+        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.8) {
+            self.generateButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+            self.generateButton.backgroundColor = .systemGreen
+        } completion: { _ in
+            UIView.animate(withDuration: 0.3) {
+                self.generateButton.transform = .identity
             }
-
-            do {
-                try session.process(requests: [request])
-            } catch {
-                print(" Process error: \(error)")
-                DispatchQueue.main.async {
-                    self.handleError(message: "Failed to start processing: \(error.localizedDescription)")
-                }
-            }
+        }
+        
+        // Update button
+        generateButton.setTitle("View in My Models", for: .normal)
+        generateButton.isEnabled = true
+        qualitySegment.isEnabled = true
+        
+        print(" Model saved to: \(savedURL.path)")
+        
+        // Auto-navigate after 1.5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.navigationController?.popToRootViewController(animated: true)
         }
     }
     
     private func handleError(message: String) {
         isProcessing = false
         activityIndicator.stopAnimating()
-        statusLabel.text = "❌ \(message)"
+        cancelButton.isHidden = true
+        statusLabel.text = " \(message)"
         statusLabel.textColor = .systemRed
         generateButton.isEnabled = true
         retakeButton.isEnabled = true
+        qualitySegment.isEnabled = true
         progressView.isHidden = true
         progressLabel.isHidden = true
+        backgroundInfoLabel.alpha = 0
         
         // Error haptic
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.error)
-    }
-
-    private func saveModel(_ url: URL) {
-        SaveManager.shared.saveModel(from: url, type: .furniture, customName: nil) { [weak self] result in
-            guard let self = self else { return }
-            
-            self.activityIndicator.stopAnimating()
-            self.isProcessing = false
-            
-            switch result {
-            case .success(let savedURL):
-                self.statusLabel.text = "✓ Model Saved Successfully!"
-                self.statusLabel.textColor = .systemGreen
-                
-                // Success haptic
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                
-                // Animate success
-                UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.8) {
-                    self.generateButton.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
-                    self.generateButton.backgroundColor = .systemGreen
-                } completion: { _ in
-                    UIView.animate(withDuration: 0.3) {
-                        self.generateButton.transform = .identity
-                    }
-                }
-                
-                // Update button
-                self.generateButton.setTitle("View in My Models", for: .normal)
-                self.generateButton.isEnabled = true
-                
-                print(" Model saved to: \(savedURL.path)")
-                
-                // Auto-navigate after 1.5 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    self.navigationController?.popToRootViewController(animated: true)
-                }
-                
-            case .failure(let error):
-                self.handleError(message: "Failed to save: \(error.localizedDescription)")
-            }
-        }
     }
 }
 

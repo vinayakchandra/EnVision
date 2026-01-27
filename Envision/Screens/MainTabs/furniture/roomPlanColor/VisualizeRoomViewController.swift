@@ -114,7 +114,41 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
         let picker = UIColorPickerViewController()
         picker.delegate = self
         picker.supportsAlpha = true
-        present(picker, animated: true)
+        
+        // Wrap in navigation controller to add custom buttons
+        let navController = UINavigationController(rootViewController: picker)
+        navController.modalPresentationStyle = .pageSheet
+        
+        // Add native Cancel button (left side)
+        let cancelButton = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(cancelColorPicker)
+        )
+        picker.navigationItem.leftBarButtonItem = cancelButton
+        
+        // Add native Done button (right side)
+        let doneButton = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(dismissColorPicker)
+        )
+        picker.navigationItem.rightBarButtonItem = doneButton
+        picker.navigationItem.title = "Choose Color"
+        
+        present(navController, animated: true)
+    }
+    
+    @objc private func cancelColorPicker() {
+        // Restore original materials when cancelling
+        if let model = selectedModel, let original = originalMaterials[model] {
+            model.model?.materials = original
+        }
+        dismiss(animated: true)
+    }
+    
+    @objc private func dismissColorPicker() {
+        dismiss(animated: true)
     }
 
     // ----------------------------------------------------------
@@ -218,18 +252,41 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
     // MARK: - Labels
     // ----------------------------------------------------------
     func attachLabel(to entity: Entity, text: String, yOffset: Float) {
-
-        labelStorage[entity]?.removeFromParent()
+        // Remove existing label safely
+        if let existingLabel = labelStorage[entity] {
+            existingLabel.components.remove(BillboardComponent.self)
+            existingLabel.removeFromParent()
+            labelStorage[entity] = nil
+        }
 
         let mesh = MeshResource.generateText(text, extrusionDepth: 0.01, font: .systemFont(ofSize: 0.15))
         let labelEntity = ModelEntity(mesh: mesh, materials: [SimpleMaterial(color: .white, isMetallic: false)])
 
         labelEntity.position = [0, yOffset, 0]
-        labelEntity.components.set(BillboardComponent())
         labelEntity.isEnabled = showLabels
 
         entity.addChild(labelEntity)
         labelStorage[entity] = labelEntity
+        
+        // Set BillboardComponent after a brief delay to avoid crash
+        DispatchQueue.main.async { [weak labelEntity] in
+            guard let labelEntity = labelEntity, labelEntity.parent != nil else { return }
+            labelEntity.components.set(BillboardComponent())
+        }
+    }
+    
+    // MARK: - Cleanup
+    private func cleanupLabels() {
+        for (_, label) in labelStorage {
+            label.components.remove(BillboardComponent.self)
+            label.removeFromParent()
+        }
+        labelStorage.removeAll()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        cleanupLabels()
     }
 }
 

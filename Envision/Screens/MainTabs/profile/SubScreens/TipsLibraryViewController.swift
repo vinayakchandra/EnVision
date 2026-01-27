@@ -4,8 +4,6 @@
 //
 
 import UIKit
-import SwiftUI
-import TipKit
 
 final class TipsLibraryViewController: UIViewController {
 

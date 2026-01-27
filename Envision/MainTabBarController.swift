@@ -1,22 +1,16 @@
 import UIKit
-import TipKit
-import SwiftUI
 
 final class MainTabBarController: UITabBarController {
-    
-    private var tipHostingController: UIViewController?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupTabs()
         setupLiquidGlassEffect()
     }
-    
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if #available(iOS 17.0, *) {
-            showWelcomeTip()
-        }
+        // Intentionally no global overlay tips here.
     }
 
     private func setupTabs() {
@@ -56,62 +50,5 @@ final class MainTabBarController: UITabBarController {
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
         tabBar.isTranslucent = true
-    }
-    
-    @available(iOS 17.0, *)
-    private func showWelcomeTip() {
-        guard TourManager.shared.shouldShowTour() else { return }
-        
-        if let existing = tipHostingController {
-            existing.willMove(toParent: nil)
-            existing.view.removeFromSuperview()
-            existing.removeFromParent()
-            tipHostingController = nil
-        }
-        
-        let tip = WelcomeTip()
-        
-        let actionHandler: (Tip.Action) -> Void = { [weak self] action in
-            guard let self = self else { return }
-            switch action.id {
-            case "start-tour":
-                TourManager.shared.startTour()
-                self.selectedIndex = 0
-                self.dismissTip()
-            case "skip":
-                TourManager.shared.completeTour()
-                self.dismissTip()
-            default: break
-            }
-        }
-        
-        let tipView = TipView(tip, arrowEdge: .bottom) { action in
-            actionHandler(action)
-        }
-        
-        let hostingController = UIHostingController(rootView: tipView)
-        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
-        hostingController.view.backgroundColor = UIColor.clear
-        
-        addChild(hostingController)
-        view.addSubview(hostingController.view)
-        hostingController.didMove(toParent: self)
-        
-        NSLayoutConstraint.activate([
-            hostingController.view.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            hostingController.view.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -20),
-            hostingController.view.widthAnchor.constraint(lessThanOrEqualToConstant: 350)
-        ])
-        
-        self.tipHostingController = hostingController
-    }
-    
-    private func dismissTip() {
-        if let existing = tipHostingController {
-            existing.willMove(toParent: nil)
-            existing.view.removeFromSuperview()
-            existing.removeFromParent()
-            tipHostingController = nil
-        }
     }
 }

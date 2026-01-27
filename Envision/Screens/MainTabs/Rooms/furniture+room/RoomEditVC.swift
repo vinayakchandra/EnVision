@@ -200,13 +200,79 @@ final class RoomEditVC: UIViewController {
 
     // MARK: - Navigation
     private func setupNavigation() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        // Save button to save colors and go back
+        let saveButton = UIBarButtonItem(
+            title: "Save",
+            style: .done,
+            target: self,
+            action: #selector(saveAndGoBack)
+        )
+        saveButton.tintColor = .systemGreen
+        
+        // Add furniture button
+        let addButton = UIBarButtonItem(
             image: UIImage(systemName: "plus"),
             style: .plain,
             target: self,
             action: #selector(addFurnitureTapped)
         )
-        navigationItem.rightBarButtonItem?.tintColor = .systemGreen
+        addButton.tintColor = .systemBlue
+        
+        navigationItem.rightBarButtonItems = [saveButton, addButton]
+    }
+    
+    @objc private func saveAndGoBack() {
+        // Generate thumbnail with current colors
+        generateAndSaveThumbnail()
+        
+        // Show success feedback
+        let alert = UIAlertController(
+            title: "Saved",
+            message: "Room colors have been saved successfully.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            // Navigate back to home (My Rooms)
+            self?.navigationController?.popToRootViewController(animated: true)
+        })
+        present(alert, animated: true)
+    }
+    
+    private func generateAndSaveThumbnail() {
+        // Capture current ARView as thumbnail
+        let renderer = UIGraphicsImageRenderer(size: arView.bounds.size)
+        let thumbnail = renderer.image { _ in
+            arView.drawHierarchy(in: arView.bounds, afterScreenUpdates: true)
+        }
+        
+        // Save thumbnail to room's thumbnail location
+        saveThumbnail(thumbnail, for: roomURL)
+    }
+    
+    private func saveThumbnail(_ image: UIImage, for roomURL: URL) {
+        let roomName = roomURL.deletingPathExtension().lastPathComponent
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let thumbnailsDir = documentsURL.appendingPathComponent("RoomThumbnails")
+        
+        // Create thumbnails directory if needed
+        try? FileManager.default.createDirectory(at: thumbnailsDir, withIntermediateDirectories: true)
+        
+        let thumbnailURL = thumbnailsDir.appendingPathComponent("\(roomName)_thumb.jpg")
+        
+        // Resize image for thumbnail (smaller file size)
+        let resizedImage = resizeImage(image, to: CGSize(width: 400, height: 300))
+        
+        if let jpegData = resizedImage.jpegData(compressionQuality: 0.8) {
+            try? jpegData.write(to: thumbnailURL)
+            print("✅ Saved thumbnail to: \(thumbnailURL.path)")
+        }
+    }
+    
+    private func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 
     // MARK: - Gestures
@@ -326,6 +392,8 @@ final class RoomEditVC: UIViewController {
     // MARK: - Materials & Labels
     private func applyMaterialRules(to root: Entity) {
         var entitiesFound:[String] = []
+        let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
+        
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
 
@@ -334,43 +402,69 @@ final class RoomEditVC: UIViewController {
                 originalMaterials[model] = model.model?.materials
             }
 
-            // 🔴 Enable Colors OFF → force everything white
+            // 🔴 Enable Colors OFF → apply saved colors or white
             guard enableColors else {
-                model.model?.materials = [SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)]
+                let name = model.name.lowercased()
+                
+                // Check for saved colors first
+                if name.starts(with: "wall"), let color = savedColors[RoomColorManager.wallKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else if name.starts(with: "floor"), let color = savedColors[RoomColorManager.floorKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                } else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else if name.starts(with: "window"), let color = savedColors[RoomColorManager.windowKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else if name.starts(with: "table"), let color = savedColors[RoomColorManager.tableKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else if name.starts(with: "chair"), let color = savedColors[RoomColorManager.chairKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else if name.starts(with: "storage"), let color = savedColors[RoomColorManager.storageKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else {
+                    model.model?.materials = [SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)]
+                }
                 return
             }
 
-            // 🟢 Enable Colors ON → apply semantic colors
+            // 🟢 Enable Colors ON → apply saved colors or default semantic colors
             let name = model.name.lowercased()
             entitiesFound.append(name)
 
             switch true {
             case name.starts(with: "wall"):
-                model.model?.materials = [SimpleMaterial(color: .systemBlue, roughness: 0.4, isMetallic: false)]
+                let color = savedColors[RoomColorManager.wallKey] ?? .systemBlue
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 1.5)
 
             case name.starts(with: "floor"):
-                model.model?.materials = [SimpleMaterial(color: .gray, roughness: 0.6, isMetallic: false)]
+                let color = savedColors[RoomColorManager.floorKey] ?? .gray
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.05)
 
             case name.starts(with: "chair"):
-                model.model?.materials = [SimpleMaterial(color: .black, roughness: 0.4, isMetallic: false)]
+                let color = savedColors[RoomColorManager.chairKey] ?? .black
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.15)
 
             case name.starts(with: "table"):
-                model.model?.materials = [SimpleMaterial(color: .systemRed, roughness: 0.4, isMetallic: false)]
+                let color = savedColors[RoomColorManager.tableKey] ?? .systemRed
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.5)
 
             case name.starts(with: "door"):
-                model.model?.materials = [SimpleMaterial(color: .systemCyan.withAlphaComponent(0.3), roughness: 0.4, isMetallic: false)]
+                let color = savedColors[RoomColorManager.doorKey] ?? .systemCyan.withAlphaComponent(0.3)
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.8)
 
             case name.starts(with: "window"):
-                model.model?.materials = [SimpleMaterial(color: .lightGray.withAlphaComponent(0.3), roughness: 0.4, isMetallic: false)]
+                let color = savedColors[RoomColorManager.windowKey] ?? .lightGray.withAlphaComponent(0.3)
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.4)
 
             case name.starts(with: "storage"):
-                model.model?.materials = [SimpleMaterial(color: .systemOrange, roughness: 0.4, isMetallic: false)]
+                let color = savedColors[RoomColorManager.storageKey] ?? .systemOrange
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 attachLabel(to: model, text: name, yOffset: 0.4)
 
             default:
@@ -433,11 +527,51 @@ final class RoomEditVC: UIViewController {
         colorTarget = target
         let picker = UIColorPickerViewController()
         picker.delegate = self
-        present(picker, animated: true)
+        picker.supportsAlpha = true
+        
+        // Wrap in navigation controller to add custom buttons
+        let navController = UINavigationController(rootViewController: picker)
+        navController.modalPresentationStyle = .pageSheet
+        
+        // Add native Cancel button (left side)
+        let cancelButton = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(cancelColorPicker)
+        )
+        picker.navigationItem.leftBarButtonItem = cancelButton
+        
+        // Add native Done button (right side)
+        let doneButton = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(dismissColorPicker)
+        )
+        picker.navigationItem.rightBarButtonItem = doneButton
+        picker.navigationItem.title = "Choose Color"
+        
+        present(navController, animated: true)
+    }
+    
+    @objc private func cancelColorPicker() {
+        // Restore original materials when cancelling
+        if let model = displayedModel {
+            applyMaterialRules(to: model)
+        }
+        dismiss(animated: true)
+    }
+    
+    @objc private func dismissColorPicker() {
+        dismiss(animated: true)
     }
 
     private func attachLabel(to entity: Entity, text: String, yOffset: Float) {
-        labels[entity]?.removeFromParent()
+        // Remove existing label safely
+        if let existingLabel = labels[entity] {
+            existingLabel.components.remove(BillboardComponent.self)
+            existingLabel.removeFromParent()
+            labels[entity] = nil
+        }
 
         let mesh = MeshResource.generateText(
             text,
@@ -447,11 +581,31 @@ final class RoomEditVC: UIViewController {
 
         let label = ModelEntity(mesh: mesh, materials: [SimpleMaterial(color: .white, isMetallic: false)])
         label.position = [0, yOffset, 0]
-        label.components.set(BillboardComponent())
         label.isEnabled = showLabels
-
+        
+        // Add to parent first, then set BillboardComponent on main thread
         entity.addChild(label)
         labels[entity] = label
+        
+        // Set BillboardComponent after a brief delay to avoid crash
+        DispatchQueue.main.async { [weak label] in
+            guard let label = label, label.parent != nil else { return }
+            label.components.set(BillboardComponent())
+        }
+    }
+    
+    // MARK: - Cleanup
+    private func cleanupLabels() {
+        for (_, label) in labels {
+            label.components.remove(BillboardComponent.self)
+            label.removeFromParent()
+        }
+        labels.removeAll()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        cleanupLabels()
     }
 
     // MARK: - Furniture
@@ -505,24 +659,83 @@ final class RoomEditVC: UIViewController {
     }
 
     private func presentColorPicker() {
+        colorTarget = .selected
         let picker = UIColorPickerViewController()
         picker.delegate = self
-        present(picker, animated: true)
+        picker.supportsAlpha = true
+        
+        // Wrap in navigation controller to add custom buttons
+        let navController = UINavigationController(rootViewController: picker)
+        navController.modalPresentationStyle = .pageSheet
+        
+        // Add native Cancel button (left side)
+        let cancelButton = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(cancelColorPicker)
+        )
+        picker.navigationItem.leftBarButtonItem = cancelButton
+        
+        // Add native Done button (right side)
+        let doneButton = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(dismissColorPicker)
+        )
+        picker.navigationItem.rightBarButtonItem = doneButton
+        picker.navigationItem.title = "Choose Color"
+        
+        present(navController, animated: true)
     }
 }
 
 // MARK: - Color Picker
 extension RoomEditVC: UIColorPickerViewControllerDelegate {
     func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController) {
+        let selectedColor = viewController.selectedColor
 
         switch colorTarget {
         case .selected:
             selectedModel?.model?.materials = [
-                SimpleMaterial(color: viewController.selectedColor, roughness: 0.4, isMetallic: false)
+                SimpleMaterial(color: selectedColor, roughness: 0.4, isMetallic: false)
             ]
+            // Save color for selected element type
+            if let modelName = selectedModel?.name.lowercased() {
+                let elementType = getElementType(from: modelName)
+                if let type = elementType {
+                    RoomColorManager.shared.saveColor(selectedColor, for: type, roomURL: roomURL)
+                }
+            }
 
         default:
-            setColor(for: colorTarget, color: viewController.selectedColor)
+            setColor(for: colorTarget, color: selectedColor)
+            // Save color for the target type
+            if let elementType = colorTargetToElementType(colorTarget) {
+                RoomColorManager.shared.saveColor(selectedColor, for: elementType, roomURL: roomURL)
+            }
+        }
+    }
+    
+    private func getElementType(from name: String) -> String? {
+        if name.starts(with: "wall") { return RoomColorManager.wallKey }
+        if name.starts(with: "floor") { return RoomColorManager.floorKey }
+        if name.starts(with: "door") { return RoomColorManager.doorKey }
+        if name.starts(with: "window") { return RoomColorManager.windowKey }
+        if name.starts(with: "table") { return RoomColorManager.tableKey }
+        if name.starts(with: "chair") { return RoomColorManager.chairKey }
+        if name.starts(with: "storage") { return RoomColorManager.storageKey }
+        return nil
+    }
+    
+    private func colorTargetToElementType(_ target: ColorTarget) -> String? {
+        switch target {
+        case .walls: return RoomColorManager.wallKey
+        case .floors: return RoomColorManager.floorKey
+        case .doors: return RoomColorManager.doorKey
+        case .windows: return RoomColorManager.windowKey
+        case .tables: return RoomColorManager.tableKey
+        case .storage: return RoomColorManager.storageKey
+        case .selected: return nil
         }
     }
 }

@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import TipKit
+// TipKit temporarily removed from the project.
 
 /// Centralized manager for tour state, progress tracking, and tour lifecycle
 final class TourManager {
@@ -55,7 +55,7 @@ final class TourManager {
     private init() {
         // Check if first launch
         if isFirstLaunch {
-            print("📱 First launch detected - Tour will be shown")
+            print(" First launch detected - Tour will be shown")
         }
     }
     
@@ -86,7 +86,7 @@ final class TourManager {
     func completeTour() {
         isTourCompleted = true
         currentTourStep = 0
-        print("✅ Tour completed")
+        print(" Tour completed")
     }
     
     /// Resets all tour progress and tips
@@ -94,31 +94,23 @@ final class TourManager {
         isTourCompleted = false
         currentTourStep = 0
         hasSeenWelcome = false
-        
-        // Reset TipKit datastore (iOS 17+)
-        if #available(iOS 17.0, *) {
-            do {
-                try Tips.resetDatastore()
-                print("🔄 Tips datastore reset")
-            } catch {
-                print("❌ Failed to reset tips: \(error)")
-            }
-        }
-        
+
+        // TipKit temporarily removed from the project.
+
         print("🔄 Tour reset complete")
     }
     
     /// Advances to the next tour step
     func nextStep() {
         currentTourStep += 1
-        print("➡️ Tour step: \(currentTourStep)")
+        print(" Tour step: \(currentTourStep)")
     }
     
     /// Skips to a specific step
     /// - Parameter step: The step number to skip to
     func skipToStep(_ step: Int) {
         currentTourStep = step
-        print("⏭️ Skipped to step: \(step)")
+        print(" Skipped to step: \(step)")
     }
     
     // MARK: - Helper Methods
@@ -171,7 +163,7 @@ final class TourManager {
     
     func forceShowTour() {
         resetTour()
-        print("✅ Tour forced to show")
+        print(" Tour forced to show")
     }
     #endif
 }

@@ -150,9 +150,14 @@ func attachLabel(to entity: Entity, text: String, yOffset: Float = 0.1) {
     let textEntity = ModelEntity(mesh: mesh, materials: [material])
 
     textEntity.position = [0, yOffset, 0]
-    textEntity.components.set(BillboardComponent())
-
+    
     entity.addChild(textEntity)
+    
+    // Set BillboardComponent after a brief delay to avoid crash
+    DispatchQueue.main.async { [weak textEntity] in
+        guard let textEntity = textEntity, textEntity.parent != nil else { return }
+        textEntity.components.set(BillboardComponent())
+    }
 }
 
 // Replacement logic

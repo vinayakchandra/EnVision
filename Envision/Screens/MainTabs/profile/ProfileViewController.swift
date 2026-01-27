@@ -4,7 +4,6 @@
 //
 
 import UIKit
-import TipKit
 
 class ProfileViewController: UIViewController {
 

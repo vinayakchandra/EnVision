@@ -304,9 +304,11 @@ Move the phone slowly around the object
 
     // MARK: - Auto Capture
     private func startAutoCapture() {
-        // Capture every 0.5 seconds for better overlap between photos
-        captureTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-            self.takePhoto()
+        // Capture every 0.4 seconds for good overlap between photos
+        // Faster capture = more photos = better reconstruction but longer processing
+        // 0.4s is a good balance for walking pace around object
+        captureTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            self?.takePhoto()
         }
     }
 

@@ -305,12 +305,49 @@ final class RoomVisualizeVC: UIViewController {
         displayedModel = clone
 
         fitToScreen(clone)
+        
+        // Apply saved colors from RoomColorManager
+        applySavedColors(to: clone)
 
         let anchor = AnchorEntity(world: .zero)
         anchor.addChild(clone)
         arView.scene.addAnchor(anchor)
 
         setupCamera()
+    }
+    
+    private func applySavedColors(to root: ModelEntity) {
+        let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
+        
+        guard !savedColors.isEmpty else { return }
+        
+        root.visit { entity in
+            guard let model = entity as? ModelEntity else { return }
+            let name = model.name.lowercased()
+            
+            // Check each element type and apply saved color if available
+            if name.starts(with: "wall"), let color = savedColors[RoomColorManager.wallKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            }
+            else if name.starts(with: "floor"), let color = savedColors[RoomColorManager.floorKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+            }
+            else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            }
+            else if name.starts(with: "window"), let color = savedColors[RoomColorManager.windowKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            }
+            else if name.starts(with: "table"), let color = savedColors[RoomColorManager.tableKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            }
+            else if name.starts(with: "chair"), let color = savedColors[RoomColorManager.chairKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            }
+            else if name.starts(with: "storage"), let color = savedColors[RoomColorManager.storageKey] {
+                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            }
+        }
     }
 
     private func fitToScreen(_ model: ModelEntity) {
