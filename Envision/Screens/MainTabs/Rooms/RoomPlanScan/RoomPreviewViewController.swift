@@ -142,6 +142,7 @@ final class RoomPreviewViewController: UIViewController {
     init(roomModel: RoomModel) {
         self.roomModel = roomModel
         super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
     }
 
     @available(*, unavailable)

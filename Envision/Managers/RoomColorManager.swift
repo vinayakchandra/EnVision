@@ -115,6 +115,66 @@ final class RoomColorManager {
             colorStorage[roomKey] = colors
         }
     }
+    
+    // MARK: - Thumbnail Management
+    
+    /// Get the thumbnail URL for a room
+    static func thumbnailURL(for roomURL: URL) -> URL {
+        let roomName = roomURL.deletingPathExtension().lastPathComponent
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let directory = documentsURL.appendingPathComponent("RoomThumbnails")
+        
+        // Create directory if needed
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        
+        return directory.appendingPathComponent("\(roomName)_thumb.jpg")
+    }
+    
+    /// Save a thumbnail image for a room
+    static func saveThumbnail(_ image: UIImage, for roomURL: URL) {
+        let thumbnailURL = thumbnailURL(for: roomURL)
+        
+        // Resize to reasonable thumbnail size
+        let targetSize = CGSize(width: 400, height: 400)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resizedImage = renderer.image { context in
+            // Fill with background color first (in case image doesn't fill)
+            UIColor.systemGray6.setFill()
+            context.fill(CGRect(origin: .zero, size: targetSize))
+            
+            // Calculate aspect-fit rect
+            let imageSize = image.size
+            let widthRatio = targetSize.width / imageSize.width
+            let heightRatio = targetSize.height / imageSize.height
+            let scale = min(widthRatio, heightRatio)
+            let scaledWidth = imageSize.width * scale
+            let scaledHeight = imageSize.height * scale
+            let x = (targetSize.width - scaledWidth) / 2
+            let y = (targetSize.height - scaledHeight) / 2
+            
+            image.draw(in: CGRect(x: x, y: y, width: scaledWidth, height: scaledHeight))
+        }
+        
+        // Save as JPEG
+        if let data = resizedImage.jpegData(compressionQuality: 0.85) {
+            do {
+                try data.write(to: thumbnailURL)
+                print("✅ Saved colored room thumbnail to: \(thumbnailURL.lastPathComponent)")
+            } catch {
+                print("❌ Failed to save thumbnail: \(error)")
+            }
+        }
+    }
+    
+    /// Check if a custom thumbnail exists
+    static func hasCustomThumbnail(for roomURL: URL) -> Bool {
+        return FileManager.default.fileExists(atPath: thumbnailURL(for: roomURL).path)
+    }
+    
+    /// Delete custom thumbnail
+    static func deleteThumbnail(for roomURL: URL) {
+        try? FileManager.default.removeItem(at: thumbnailURL(for: roomURL))
+    }
 }
 
 // MARK: - UIColor Extension for Hex Output

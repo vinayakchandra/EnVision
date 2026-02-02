@@ -85,7 +85,7 @@ final class BackgroundModelProcessor: @unchecked Sendable {
     // MARK: - Notification Permission
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            print("📱 Notification permission: \(granted ? "granted" : "denied")")
+            print(" Notification permission: \(granted ? "granted" : "denied")")
         }
     }
     

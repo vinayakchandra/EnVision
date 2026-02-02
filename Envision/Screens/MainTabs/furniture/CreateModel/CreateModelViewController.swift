@@ -7,6 +7,17 @@ class CreateModelViewController: UIViewController {
 
     private var importedFolderURL: URL?
 
+    // MARK: - Init
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        hidesBottomBarWhenPushed = true
+    }
+
     // MARK: - Progress UI
     private let progressView: UIProgressView = {
         let pv = UIProgressView(progressViewStyle: .default)

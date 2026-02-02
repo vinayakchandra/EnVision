@@ -6,6 +6,17 @@ class RoomARViewController1: UIViewController {
 
     let arView = ARView(frame: .zero)
 
+    // MARK: - Init
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        hidesBottomBarWhenPushed = true
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.addSubview(arView)
@@ -21,7 +32,7 @@ class RoomARViewController1: UIViewController {
 
         // Load room model
         guard let room = try? Entity.load(named: "ios_room") else {
-            print("❌ Could not load ios_room.usdz")
+            print(" Could not load ios_room.usdz")
             return
         }
 

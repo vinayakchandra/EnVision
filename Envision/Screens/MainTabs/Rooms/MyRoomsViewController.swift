@@ -67,8 +67,34 @@ final class MyRoomsViewController: UIViewController {
         MetadataManager.shared.cleanupOrphanedMetadata()
 
         loadRoomFiles()
+        
+        // Listen for thumbnail updates
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleThumbnailUpdate(_:)),
+            name: Notification.Name("RoomThumbnailDidUpdate"),
+            object: nil
+        )
 
         // Tips temporarily removed
+    }
+    
+    @objc private func handleThumbnailUpdate(_ notification: Notification) {
+        guard let roomURL = notification.userInfo?["roomURL"] as? URL else { return }
+        
+        // Clear cached thumbnail so it reloads
+        thumbnailCache.removeObject(forKey: roomURL as NSURL)
+        
+        // Reload the collection view
+        DispatchQueue.main.async {
+            self.collectionView.reloadData()
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Reload to pick up any thumbnail updates
+        collectionView.reloadData()
     }
 
     override func viewDidAppear(_ animated: Bool) {

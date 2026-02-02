@@ -165,7 +165,7 @@ final class ObjectCapturePreviewController: UIViewController {
     
     private let backgroundInfoLabel: UILabel = {
         let lbl = UILabel()
-        lbl.text = "💡 You can leave this screen - processing continues in background"
+        lbl.text = " You can leave this screen - processing continues in background"
         lbl.font = .systemFont(ofSize: 13, weight: .medium)
         lbl.textColor = .systemBlue
         lbl.textAlignment = .center
@@ -202,6 +202,7 @@ final class ObjectCapturePreviewController: UIViewController {
     init(imagesFolder: URL) {
         self.imagesFolder = imagesFolder
         super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
     }
     required init?(coder: NSCoder) { fatalError() }
 

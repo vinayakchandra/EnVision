@@ -76,6 +76,38 @@ final class RoomEditVC: UIViewController {
         setupFloatingMenu()
         loadRoom()
     }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        // Cleanup labels
+        cleanupLabels()
+        
+        // Save thumbnail of the colored room when leaving
+        saveColoredThumbnail()
+    }
+    
+    // MARK: - Thumbnail Capture
+    private func saveColoredThumbnail() {
+        // Only save if colors have been applied
+        let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
+        guard !savedColors.isEmpty else { return }
+        
+        // Capture snapshot from ARView
+        arView.snapshot(saveToHDR: false) { [weak self] image in
+            guard let self = self, let image = image else { return }
+            
+            // Save the thumbnail
+            RoomColorManager.saveThumbnail(image, for: self.roomURL)
+            
+            // Post notification to refresh thumbnails in MyRooms
+            NotificationCenter.default.post(
+                name: Notification.Name("RoomThumbnailDidUpdate"),
+                object: nil,
+                userInfo: ["roomURL": self.roomURL]
+            )
+        }
+    }
 
     // MARK: - Floating Menu
     private func setupFloatingMenu() {
@@ -603,11 +635,6 @@ final class RoomEditVC: UIViewController {
         labels.removeAll()
     }
     
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        cleanupLabels()
-    }
-
     // MARK: - Furniture
     @objc private func addFurnitureTapped() {
         let picker = FurniturePicker()

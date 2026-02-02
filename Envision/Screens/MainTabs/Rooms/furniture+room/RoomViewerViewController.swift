@@ -20,6 +20,7 @@ final class RoomViewerViewController: UIViewController {
     init(roomURL: URL) {
         self.roomURL = roomURL
         super.init(nibName: nil, bundle: nil)
+        hidesBottomBarWhenPushed = true
     }
 
     required init?(coder: NSCoder) {

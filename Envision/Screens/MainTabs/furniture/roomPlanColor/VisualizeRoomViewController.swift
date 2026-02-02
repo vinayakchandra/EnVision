@@ -15,6 +15,17 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
     var originalMaterials: [ModelEntity: [Material]] = [:]
     var labelStorage: [Entity: Entity] = [:] // Parent -> Label
 
+    // MARK: - Init
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        hidesBottomBarWhenPushed = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        hidesBottomBarWhenPushed = true
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Room Geometry Playground"

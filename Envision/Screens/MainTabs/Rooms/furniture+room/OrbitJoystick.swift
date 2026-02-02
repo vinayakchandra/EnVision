@@ -3,7 +3,6 @@ import UIKit
 final class OrbitJoystick: UIView {
 
     // MARK: - Output
-    /// Normalized values (-1...1)
     var onMove: ((Float, Float) -> Void)?
 
     // MARK: - UI
