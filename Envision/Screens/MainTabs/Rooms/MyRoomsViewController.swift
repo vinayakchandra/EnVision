@@ -28,7 +28,14 @@ final class MyRoomsViewController: UIViewController {
     var roomFiles: [URL] = []
     var selectedCategory: RoomCategory?
     var selectedRoomType: RoomType?
-    let thumbnailCache = NSCache<NSURL, UIImage>()
+    lazy var thumbnailCache: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        // Limit cache to 50 thumbnails to prevent excessive memory usage
+        cache.countLimit = 50
+        // Set total cost limit to ~50MB (assuming avg 1MB per thumbnail)
+        cache.totalCostLimit = 50 * 1024 * 1024
+        return cache
+    }()
     var isSelectionMode = false
 
     private var isSearching: Bool {
@@ -85,16 +92,25 @@ final class MyRoomsViewController: UIViewController {
         // Clear cached thumbnail so it reloads
         thumbnailCache.removeObject(forKey: roomURL as NSURL)
         
-        // Reload the collection view
-        DispatchQueue.main.async {
-            self.collectionView.reloadData()
+        // Find the index of this room in displayFiles
+        guard let index = displayFiles.firstIndex(of: roomURL) else {
+            // Room not currently displayed (filtered out or doesn't exist)
+            return
+        }
+        
+        // Only reload if the cell is visible (performance optimization)
+        let indexPath = IndexPath(item: index, section: 1)
+        if collectionView.indexPathsForVisibleItems.contains(indexPath) {
+            DispatchQueue.main.async {
+                self.collectionView.reloadItems(at: [indexPath])
+            }
         }
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Reload to pick up any thumbnail updates
-        collectionView.reloadData()
+        // Thumbnails are updated via notifications, no need to reload everything
+        // Only reload if we're coming back from background or files changed
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -362,7 +378,12 @@ final class MyRoomsViewController: UIViewController {
             let filename = url.lastPathComponent
             SaveManager.shared.deleteModel(at: url) { success in
                 if success {
+                    // Delete metadata
                     MetadataManager.shared.deleteMetadata(for: filename)
+                    
+                    // 🆕 Delete thumbnail to prevent orphaned files
+                    RoomColorManager.deleteThumbnail(for: url)
+                    
                     count += 1
                 }
             }
@@ -522,47 +543,64 @@ final class MyRoomsViewController: UIViewController {
 
     // MARK: - Thumbnails
     func generateThumbnail(for url: URL, completion: @escaping (UIImage?) -> Void) {
-        // Check memory cache first
+        // Check memory cache first (on main thread - fast)
         if let cached = thumbnailCache.object(forKey: url as NSURL) {
             completion(cached)
             return
         }
         
-        // Check for saved colored thumbnail
-        if let savedThumbnail = loadSavedThumbnail(for: url) {
-            thumbnailCache.setObject(savedThumbnail, forKey: url as NSURL)
-            completion(savedThumbnail)
-            return
-        }
-
-        // Fall back to QuickLook generator
-        let req = QLThumbnailGenerator.Request(
-            fileAt: url,
-            size: CGSize(width: 400, height: 400),
-            scale: UIScreen.main.scale,
-            representationTypes: .all
-        )
-
-        QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
+        // Check for saved colored thumbnail on background queue
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            if let savedThumbnail = self.loadSavedThumbnail(for: url) {
+                // Cache and return on main thread
+                DispatchQueue.main.async {
+                    self.thumbnailCache.setObject(savedThumbnail, forKey: url as NSURL)
+                    completion(savedThumbnail)
+                }
+                return
+            }
+            
+            // Fall back to QuickLook generator
             DispatchQueue.main.async {
-                if let img = rep?.uiImage {
-                    self?.thumbnailCache.setObject(img, forKey: url as NSURL)
-                    completion(img)
-                } else {
-                    completion(nil)
+                let req = QLThumbnailGenerator.Request(
+                    fileAt: url,
+                    size: CGSize(width: 400, height: 400),
+                    scale: UIScreen.main.scale,
+                    representationTypes: .all
+                )
+
+                QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
+                    DispatchQueue.main.async {
+                        if let img = rep?.uiImage {
+                            self?.thumbnailCache.setObject(img, forKey: url as NSURL)
+                            completion(img)
+                        } else {
+                            completion(nil)
+                        }
+                    }
                 }
             }
         }
     }
     
     private func loadSavedThumbnail(for roomURL: URL) -> UIImage? {
+        // This method is called on background queue now
         let roomName = roomURL.deletingPathExtension().lastPathComponent
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let thumbnailURL = documentsURL.appendingPathComponent("RoomThumbnails/\(roomName)_thumb.jpg")
         
-        guard FileManager.default.fileExists(atPath: thumbnailURL.path),
-              let imageData = try? Data(contentsOf: thumbnailURL),
+        guard FileManager.default.fileExists(atPath: thumbnailURL.path) else {
+            return nil
+        }
+        
+        // Try to load and validate the image
+        guard let imageData = try? Data(contentsOf: thumbnailURL),
               let image = UIImage(data: imageData) else {
+            // Corrupted thumbnail - delete it so it can be regenerated
+            try? FileManager.default.removeItem(at: thumbnailURL)
+            print("⚠️ Removed corrupted thumbnail: \(roomName)")
             return nil
         }
         

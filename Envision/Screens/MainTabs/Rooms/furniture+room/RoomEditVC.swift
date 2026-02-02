@@ -89,13 +89,15 @@ final class RoomEditVC: UIViewController {
     
     // MARK: - Thumbnail Capture
     private func saveColoredThumbnail() {
-        // Only save if colors have been applied
-        let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
-        guard !savedColors.isEmpty else { return }
+        // Always save thumbnail, even if no colors have been applied yet
+        // This ensures newly scanned rooms get thumbnails on first view
         
         // Capture snapshot from ARView
         arView.snapshot(saveToHDR: false) { [weak self] image in
-            guard let self = self, let image = image else { return }
+            guard let self = self, let image = image else { 
+                print("⚠️ Failed to capture ARView snapshot for thumbnail")
+                return 
+            }
             
             // Save the thumbnail
             RoomColorManager.saveThumbnail(image, for: self.roomURL)
@@ -106,6 +108,8 @@ final class RoomEditVC: UIViewController {
                 object: nil,
                 userInfo: ["roomURL": self.roomURL]
             )
+            
+            print("✅ Saved room thumbnail via ARView snapshot")
         }
     }
 
@@ -254,8 +258,8 @@ final class RoomEditVC: UIViewController {
     }
     
     @objc private func saveAndGoBack() {
-        // Generate thumbnail with current colors
-        generateAndSaveThumbnail()
+        // Save thumbnail using ARView snapshot before going back
+        saveColoredThumbnail()
         
         // Show success feedback
         let alert = UIAlertController(
@@ -268,43 +272,6 @@ final class RoomEditVC: UIViewController {
             self?.navigationController?.popToRootViewController(animated: true)
         })
         present(alert, animated: true)
-    }
-    
-    private func generateAndSaveThumbnail() {
-        // Capture current ARView as thumbnail
-        let renderer = UIGraphicsImageRenderer(size: arView.bounds.size)
-        let thumbnail = renderer.image { _ in
-            arView.drawHierarchy(in: arView.bounds, afterScreenUpdates: true)
-        }
-        
-        // Save thumbnail to room's thumbnail location
-        saveThumbnail(thumbnail, for: roomURL)
-    }
-    
-    private func saveThumbnail(_ image: UIImage, for roomURL: URL) {
-        let roomName = roomURL.deletingPathExtension().lastPathComponent
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let thumbnailsDir = documentsURL.appendingPathComponent("RoomThumbnails")
-        
-        // Create thumbnails directory if needed
-        try? FileManager.default.createDirectory(at: thumbnailsDir, withIntermediateDirectories: true)
-        
-        let thumbnailURL = thumbnailsDir.appendingPathComponent("\(roomName)_thumb.jpg")
-        
-        // Resize image for thumbnail (smaller file size)
-        let resizedImage = resizeImage(image, to: CGSize(width: 400, height: 300))
-        
-        if let jpegData = resizedImage.jpegData(compressionQuality: 0.8) {
-            try? jpegData.write(to: thumbnailURL)
-            print("✅ Saved thumbnail to: \(thumbnailURL.path)")
-        }
-    }
-    
-    private func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
-        }
     }
 
     // MARK: - Gestures

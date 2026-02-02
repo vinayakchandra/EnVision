@@ -134,7 +134,7 @@ final class RoomColorManager {
     static func saveThumbnail(_ image: UIImage, for roomURL: URL) {
         let thumbnailURL = thumbnailURL(for: roomURL)
         
-        // Resize to reasonable thumbnail size
+        // Resize to standard thumbnail size (consistent across app)
         let targetSize = CGSize(width: 400, height: 400)
         let renderer = UIGraphicsImageRenderer(size: targetSize)
         let resizedImage = renderer.image { context in
@@ -155,13 +155,19 @@ final class RoomColorManager {
             image.draw(in: CGRect(x: x, y: y, width: scaledWidth, height: scaledHeight))
         }
         
-        // Save as JPEG
+        // Save as JPEG with quality compression
         if let data = resizedImage.jpegData(compressionQuality: 0.85) {
             do {
                 try data.write(to: thumbnailURL)
-                print("✅ Saved colored room thumbnail to: \(thumbnailURL.lastPathComponent)")
+                print("✅ Saved colored room thumbnail (400x400) to: \(thumbnailURL.lastPathComponent)")
             } catch {
-                print("❌ Failed to save thumbnail: \(error)")
+                print("❌ Failed to save thumbnail: \(error.localizedDescription)")
+                // Post notification about failure
+                NotificationCenter.default.post(
+                    name: Notification.Name("RoomThumbnailSaveFailed"),
+                    object: nil,
+                    userInfo: ["roomURL": roomURL, "error": error]
+                )
             }
         }
     }

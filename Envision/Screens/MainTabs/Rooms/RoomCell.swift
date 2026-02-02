@@ -294,4 +294,10 @@ final class RoomCell: UICollectionViewCell {
             roomTypeBadge.isHidden = false
         }
     }
+    
+    /// Update only the thumbnail image (performance optimization)
+    func updateThumbnail(_ image: UIImage?) {
+        thumbnailView.image = image ?? UIImage(systemName: "arkit")
+    }
 }
+

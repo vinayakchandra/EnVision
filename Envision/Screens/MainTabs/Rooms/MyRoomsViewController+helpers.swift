@@ -47,7 +47,6 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
             let url = displayFiles[indexPath.item]
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: RoomCell.reuseID, for: indexPath) as! RoomCell
 
-            // ✅ ADD THIS LINE (IMPORTANT)
             cell.setSelectionMode(isSelectionMode, animated: false)
 
             let metadata = loadMetadata(for: url)
@@ -61,21 +60,14 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
                 roomType: metadata?.roomType
             )
 
+            // Load thumbnail asynchronously and only update the image
             generateThumbnail(for: url) { [weak self] image in
                 guard let self = self,
-                      let cell = self.collectionView.cellForItem(at: indexPath) as? RoomCell
+                      let currentCell = self.collectionView.cellForItem(at: indexPath) as? RoomCell
                 else { return }
 
-                let metadata = self.loadMetadata(for: url)
-
-                cell.configure(
-                    fileName: url.lastPathComponent,
-                    size: self.fileSizeString(for: url),
-                    dateText: self.fileDateString(for: url),
-                    thumbnail: image,
-                    category: metadata?.category,
-                    roomType: metadata?.roomType
-                )
+                // Only update the thumbnail image, not the entire cell configuration
+                currentCell.updateThumbnail(image)
             }
 
             return cell

@@ -429,15 +429,23 @@ final class RoomPreviewViewController: UIViewController {
                     for: savedURL.lastPathComponent,
                     metadata: metadata
                 )
+                
+                // 🆕 Save thumbnail from preview image
+                if let thumbnail = self.imageView.image {
+                    RoomColorManager.saveThumbnail(thumbnail, for: savedURL)
+                    print("✅ Saved thumbnail for newly scanned room")
+                } else {
+                    print("⚠️ No preview image available for thumbnail")
+                }
 
                 self.isSaved = true
                 self.usdzURL = savedURL
                 self.showSuccessAnimation()
 
             case .failure(let error):
-                print(" Save error: \(error)")
+                print("❌ Save error: \(error)")
                 self.saveButton.isEnabled = true
-                self.saveButton.setTitle(" Save to My Rooms", for: .normal)
+                self.saveButton.setTitle("Save to My Rooms", for: .normal)
                 self.showErrorAlert(message: "Failed to save room. Please try again.")
             }
         }
