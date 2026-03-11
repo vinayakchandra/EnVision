@@ -66,9 +66,9 @@ final class RoomViewerViewController: UIViewController {
         vc.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         vc.didMove(toParent: self)
 
-        // Forward nav items
-        navigationItem.rightBarButtonItem = vc.navigationItem.rightBarButtonItem
-        navigationItem.leftBarButtonItem  = vc.navigationItem.leftBarButtonItem
+        // Forward nav items (use plural rightBarButtonItems to show all buttons)
+        navigationItem.rightBarButtonItems = vc.navigationItem.rightBarButtonItems
+        navigationItem.leftBarButtonItems  = vc.navigationItem.leftBarButtonItems
 
         currentChild = vc
     }

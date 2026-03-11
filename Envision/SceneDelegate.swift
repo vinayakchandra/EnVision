@@ -19,7 +19,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         let window = UIWindow(windowScene: windowScene)
     window.rootViewController = SplashViewController()
-    //  window.rootViewController = MainTabBarController()
+   //   window.rootViewController = MainTabBarController()
         self.window = window
         window.makeKeyAndVisible()
         

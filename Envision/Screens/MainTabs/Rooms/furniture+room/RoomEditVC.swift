@@ -94,9 +94,9 @@ final class RoomEditVC: UIViewController {
         
         // Capture snapshot from ARView
         arView.snapshot(saveToHDR: false) { [weak self] image in
-            guard let self = self, let image = image else { 
+            guard let self = self, let image = image else {
                 print("⚠️ Failed to capture ARView snapshot for thumbnail")
-                return 
+                return
             }
             
             // Save the thumbnail
@@ -245,16 +245,8 @@ final class RoomEditVC: UIViewController {
         )
         saveButton.tintColor = .systemGreen
         
-        // Add furniture button
-        let addButton = UIBarButtonItem(
-            image: UIImage(systemName: "plus"),
-            style: .plain,
-            target: self,
-            action: #selector(addFurnitureTapped)
-        )
-        addButton.tintColor = .systemBlue
-        
-        navigationItem.rightBarButtonItems = [saveButton, addButton]
+        // Only Save button in Edit mode (no add furniture button)
+        navigationItem.rightBarButtonItems = [saveButton]
     }
     
     @objc private func saveAndGoBack() {

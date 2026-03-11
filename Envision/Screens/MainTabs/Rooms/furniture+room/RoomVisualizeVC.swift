@@ -14,6 +14,26 @@ final class RoomVisualizeVC: UIViewController {
     private var measurementPoints: [SIMD3<Float>] = []
     private var measurementLabel: UILabel?
     private var measurementLine: ModelEntity?
+    
+    // MARK: - Measurement State
+    private let measurementManager = MeasurementManager.shared
+    private let proximitySystem = ProximityMeasurementSystem.shared
+    private let scaleManager = RealWorldScaleManager.shared
+    private var activeBoundingBoxes: [BoundingBoxEntity] = []
+    private var selectedFurnitureForMeasurement: ModelEntity?
+    private var measurementModeType: MeasurementModeType = .pointToPoint
+    
+    // Proximity measurement - persistent & dynamic
+    private var proximityUpdateTimer: Timer?
+    private var isProximityModeActive = false
+    private var trackedFurnitureForProximity: [ModelEntity] = []
+    
+    private enum MeasurementModeType {
+        case pointToPoint    // Original: tap two points
+        case furniture       // Show furniture dimensions
+        case room           // Show room dimensions
+        case proximity      // Auto-show distances to walls/objects
+    }
 
     // MARK: - Camera
     private let cameraAnchor = AnchorEntity()
@@ -26,7 +46,8 @@ final class RoomVisualizeVC: UIViewController {
     private let arView: ARView = {
         let view = ARView(frame: .zero)
         view.cameraMode = .nonAR
-        view.environment.background = .color(.systemGray6)
+        // Grey-blueish background for better button visibility
+        view.environment.background = .color(UIColor(red: 0.85, green: 0.88, blue: 0.92, alpha: 1.0))
         return view
     }()
 
@@ -69,6 +90,7 @@ final class RoomVisualizeVC: UIViewController {
 
     // MARK: - Navigation
     private func setupNavigation() {
+        // Ruler button (leftmost) - for measurements
         let rulerButton = UIBarButtonItem(
             image: UIImage(systemName: "ruler"),
             style: .plain,
@@ -77,6 +99,16 @@ final class RoomVisualizeVC: UIViewController {
         )
         rulerButton.tintColor = .systemBlue
         
+        // Share button (middle) - for export
+        let shareButton = UIBarButtonItem(
+            image: UIImage(systemName: "square.and.arrow.up"),
+            style: .plain,
+            target: self,
+            action: #selector(shareTapped)
+        )
+        shareButton.tintColor = .systemBlue
+        
+        // Add furniture button (rightmost)
         let addButton = UIBarButtonItem(
             image: UIImage(systemName: "plus"),
             style: .plain,
@@ -85,27 +117,567 @@ final class RoomVisualizeVC: UIViewController {
         )
         addButton.tintColor = .systemGreen
         
-        navigationItem.rightBarButtonItems = [addButton, rulerButton]
+        // Order: rightmost first in array
+        navigationItem.rightBarButtonItems = [addButton, shareButton, rulerButton]
+    }
+    
+    // MARK: - Share Action
+    @objc private func shareTapped() {
+        presentShareOptions()
+    }
+    
+    private func presentShareOptions() {
+        let alert = UIAlertController(title: "Export Room", message: "Choose export format", preferredStyle: .actionSheet)
+        
+        alert.addAction(UIAlertAction(title: "📷 Image (PNG)", style: .default) { [weak self] _ in
+            self?.exportAsImage()
+        })
+        
+        alert.addAction(UIAlertAction(title: "📦 3D Model (USDZ)", style: .default) { [weak self] _ in
+            self?.exportAsUSDZ()
+        })
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        // For iPad support
+        if let popover = alert.popoverPresentationController {
+            popover.barButtonItem = navigationItem.rightBarButtonItems?[1]
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func exportAsImage() {
+        arView.snapshot(saveToHDR: false) { [weak self] image in
+            guard let self = self, let image = image else {
+                self?.showExportError("Failed to capture image")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+                if let popover = activityVC.popoverPresentationController {
+                    popover.barButtonItem = self.navigationItem.rightBarButtonItems?[1]
+                }
+                self.present(activityVC, animated: true)
+            }
+        }
+    }
+    
+    private func exportAsUSDZ() {
+        guard let model = displayedModel else {
+            showExportError("No room model to export")
+            return
+        }
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = roomURL.deletingPathExtension().lastPathComponent
+        let exportURL = tempDir.appendingPathComponent("\(fileName)_export.usdz")
+        
+        // Remove existing file if present
+        try? FileManager.default.removeItem(at: exportURL)
+        
+        // Show loading indicator
+        let loadingAlert = UIAlertController(title: nil, message: "Exporting...", preferredStyle: .alert)
+        let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.style = .medium
+        loadingIndicator.startAnimating()
+        loadingAlert.view.addSubview(loadingIndicator)
+        present(loadingAlert, animated: true)
+        
+        Task {
+            do {
+                if #available(iOS 15.0, *) {
+                    try await model.exportAsUSDZAsync(to: exportURL)
+                } else {
+                    try model.exportAsUSDZ(to: exportURL)
+                }
+                
+                await MainActor.run {
+                    loadingAlert.dismiss(animated: true) { [weak self] in
+                        guard let self = self else { return }
+                        let activityVC = UIActivityViewController(activityItems: [exportURL], applicationActivities: nil)
+                        if let popover = activityVC.popoverPresentationController {
+                            popover.barButtonItem = self.navigationItem.rightBarButtonItems?[1]
+                        }
+                        self.present(activityVC, animated: true)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    loadingAlert.dismiss(animated: true) { [weak self] in
+                        self?.showExportError("Export failed: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func showExportError(_ message: String) {
+        let alert = UIAlertController(title: "Export Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
     
     @objc private func rulerTapped() {
-        isMeasuringMode.toggle()
-        
-        // Update button appearance
-        if let rulerButton = navigationItem.rightBarButtonItems?.last {
-            rulerButton.tintColor = isMeasuringMode ? .systemOrange : .systemBlue
-            rulerButton.image = UIImage(systemName: isMeasuringMode ? "ruler.fill" : "ruler")
-        }
-        
         if isMeasuringMode {
-            showMeasurementInstructions()
-            setupMeasurementTapGesture()
+            // Turn off measurement mode
+            exitMeasurementMode()
         } else {
-            clearMeasurement()
-            removeMeasurementTapGesture()
+            // Show measurement options
+            showMeasurementOptions()
         }
     }
     
+    private func showMeasurementOptions() {
+        let alert = UIAlertController(title: "Measurement Mode", message: "Choose what to measure", preferredStyle: .actionSheet)
+        
+        alert.addAction(UIAlertAction(title: "📏 Point to Point", style: .default) { [weak self] _ in
+            self?.enterMeasurementMode(type: .pointToPoint)
+        })
+        
+        alert.addAction(UIAlertAction(title: "📦 Room Dimensions", style: .default) { [weak self] _ in
+            self?.enterMeasurementMode(type: .room)
+        })
+        
+        if !placedFurniture.isEmpty {
+            alert.addAction(UIAlertAction(title: "🪑 Furniture Dimensions", style: .default) { [weak self] _ in
+                self?.enterMeasurementMode(type: .furniture)
+            })
+            
+            // NEW: Proximity measurement option
+            alert.addAction(UIAlertAction(title: "📐 Furniture Proximity (Auto)", style: .default) { [weak self] _ in
+                self?.enterMeasurementMode(type: .proximity)
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        // For iPad support
+        if let popover = alert.popoverPresentationController {
+            popover.barButtonItem = navigationItem.rightBarButtonItems?.last
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func enterMeasurementMode(type: MeasurementModeType) {
+        isMeasuringMode = true
+        measurementModeType = type
+        measurementManager.enable()
+        
+        // Update button appearance
+        updateRulerButtonAppearance(active: true)
+        
+        switch type {
+        case .pointToPoint:
+            showMeasurementInstructions()
+            setupMeasurementTapGesture()
+            
+        case .room:
+            showRoomMeasurements()
+            
+        case .furniture:
+            showFurnitureMeasurementInstructions()
+            setupFurnitureTapGesture()
+            
+        case .proximity:
+            showProximityMeasurements()
+        }
+    }
+    
+    private func exitMeasurementMode() {
+        isMeasuringMode = false
+        measurementManager.disable()
+        
+        // Stop proximity updates
+        stopProximityUpdates()
+        isProximityModeActive = false
+        trackedFurnitureForProximity.removeAll()
+        
+        // Update button appearance
+        updateRulerButtonAppearance(active: false)
+        
+        // Clear all measurements
+        clearMeasurement()
+        clearBoundingBoxes()
+        proximitySystem.clearIndicators()
+        removeMeasurementTapGesture()
+        removeFurnitureTapGesture()
+        removeProximityTapGesture()
+    }
+    
+    // MARK: - Proximity Update Timer
+    
+    private func startProximityUpdates() {
+        stopProximityUpdates() // Stop any existing timer
+        
+        // Update every 0.033 seconds (30fps) for smooth real-time tracking
+        proximityUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.0333333, repeats: true) { [weak self] _ in
+            self?.updateProximityMeasurements()
+        }
+    }
+    
+    private func stopProximityUpdates() {
+        proximityUpdateTimer?.invalidate()
+        proximityUpdateTimer = nil
+    }
+    
+    private func updateProximityMeasurements() {
+        guard isProximityModeActive, !trackedFurnitureForProximity.isEmpty else { return }
+        
+        // Use the batch update method that clears once and adds all
+        proximitySystem.showProximityForAllFurniture(
+            trackedFurnitureForProximity,
+            roomModel: displayedModel,
+            in: arView.scene
+        )
+    }
+    
+    private func updateRulerButtonAppearance(active: Bool) {
+        if let rulerButton = navigationItem.rightBarButtonItems?.last {
+            rulerButton.tintColor = active ? .systemOrange : .systemBlue
+            rulerButton.image = UIImage(systemName: active ? "ruler.fill" : "ruler")
+        }
+    }
+    
+    // MARK: - Room Measurements
+    private func showRoomMeasurements() {
+        guard let model = displayedModel else { return }
+        
+        // Clear existing bounding boxes
+        clearBoundingBoxes()
+        
+        // Create bounding box for the room
+        let boundingBox = BoundingBoxEntity.forRoom(
+            entity: model,
+            unit: measurementManager.currentUnit
+        )
+        boundingBox.position = model.position(relativeTo: nil)
+        
+        if let anchor = arView.scene.anchors.first {
+            anchor.addChild(boundingBox)
+            activeBoundingBoxes.append(boundingBox)
+        }
+        
+        // Show room dimensions toast
+        showRoomDimensionsToast(for: model)
+    }
+    
+    private func showRoomDimensionsToast(for model: Entity) {
+        // Use RealWorldScaleManager for accurate real-world dimensions
+        let realDimensions = scaleManager.originalRoomDimensions
+        
+        let toast = UILabel()
+        toast.numberOfLines = 0
+        toast.text = """
+        Room Dimensions (Real-World)
+        W: \(scaleManager.formatRealWorldDistance(realDimensions.x))
+        H: \(scaleManager.formatRealWorldDistance(realDimensions.y))
+        D: \(scaleManager.formatRealWorldDistance(realDimensions.z))
+        """
+        toast.font = .systemFont(ofSize: 14, weight: .medium)
+        toast.textColor = .white
+        toast.backgroundColor = AppColors.accent.withAlphaComponent(0.95)
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 12
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(toast)
+        measurementLabel = toast
+        
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 180)
+        ])
+    }
+    
+    // MARK: - Furniture Measurements
+    private func showFurnitureMeasurementInstructions() {
+        let toast = UILabel()
+        toast.text = "Tap a furniture item to see dimensions"
+        toast.font = .systemFont(ofSize: 15, weight: .medium)
+        toast.textColor = .white
+        toast.backgroundColor = AppColors.accent.withAlphaComponent(0.9)
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 12
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(toast)
+        
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toast.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+            toast.heightAnchor.constraint(equalToConstant: 40),
+            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 280)
+        ])
+        
+        UIView.animate(withDuration: 0.3, delay: 2.5) {
+            toast.alpha = 0
+        } completion: { _ in
+            toast.removeFromSuperview()
+        }
+    }
+    
+    private var furnitureTapGesture: UITapGestureRecognizer?
+    
+    private func setupFurnitureTapGesture() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleFurnitureTap(_:)))
+        arView.addGestureRecognizer(tap)
+        furnitureTapGesture = tap
+    }
+    
+    private func removeFurnitureTapGesture() {
+        if let gesture = furnitureTapGesture {
+            arView.removeGestureRecognizer(gesture)
+            furnitureTapGesture = nil
+        }
+    }
+    
+    @objc private func handleFurnitureTap(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: arView)
+        
+        guard let tappedEntity = arView.entity(at: location) else { return }
+        
+        // Find if this entity is part of placed furniture
+        for furniture in placedFurniture {
+            if tappedEntity == furniture || isDescendant(tappedEntity, of: furniture) {
+                showFurnitureMeasurement(for: furniture)
+                return
+            }
+        }
+    }
+    
+    private func isDescendant(_ entity: Entity, of parent: Entity) -> Bool {
+        var current = entity.parent
+        while let p = current {
+            if p == parent { return true }
+            current = p.parent
+        }
+        return false
+    }
+    
+    private func showFurnitureMeasurement(for furniture: ModelEntity) {
+        // Clear previous measurement
+        clearBoundingBoxes()
+        measurementLabel?.removeFromSuperview()
+        
+        selectedFurnitureForMeasurement = furniture
+        
+        // Create bounding box for furniture
+        let boundingBox = BoundingBoxEntity.forFurniture(
+            entity: furniture,
+            unit: measurementManager.currentUnit
+        )
+        boundingBox.position = furniture.position(relativeTo: nil)
+        
+        if let anchor = arView.scene.anchors.first {
+            anchor.addChild(boundingBox)
+            activeBoundingBoxes.append(boundingBox)
+        }
+        
+        // Show dimensions toast
+        showFurnitureDimensionsToast(for: furniture)
+        
+        // Add haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+    }
+    
+    private func showFurnitureDimensionsToast(for furniture: Entity) {
+        // Use RealWorldScaleManager for accurate real-world dimensions
+        let realDimensions = furniture.realWorldDimensions
+        
+        let toast = UILabel()
+        toast.numberOfLines = 0
+        toast.text = """
+        Furniture Dimensions (Real-World)
+        W: \(scaleManager.formatRealWorldDistance(realDimensions.x))
+        H: \(scaleManager.formatRealWorldDistance(realDimensions.y))
+        D: \(scaleManager.formatRealWorldDistance(realDimensions.z))
+        """
+        toast.font = .systemFont(ofSize: 14, weight: .medium)
+        toast.textColor = .white
+        toast.backgroundColor = AppColors.accent.withAlphaComponent(0.95)
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 12
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(toast)
+        measurementLabel = toast
+        
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 180)
+        ])
+    }
+    
+    // MARK: - Proximity Measurements (Auto-Distance)
+    
+    private var proximityTapGesture: UITapGestureRecognizer?
+    
+    private func showProximityMeasurements() {
+        guard !placedFurniture.isEmpty else {
+            showNoFurnitureAlert()
+            exitMeasurementMode()
+            return
+        }
+        
+        // Enable proximity mode
+        isProximityModeActive = true
+        
+        // Track all placed furniture for dynamic updates
+        trackedFurnitureForProximity = placedFurniture
+        
+        // Show initial proximity measurements for all furniture
+        showAllFurnitureProximity()
+        
+        // Start the update timer for dynamic tracking
+        startProximityUpdates()
+        
+        // Setup tap gesture to select specific furniture
+        setupProximityTapGesture()
+    }
+    
+    private func showNoFurnitureAlert() {
+        let alert = UIAlertController(
+            title: "No Furniture",
+            message: "Place some furniture first to measure distances",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    private func showProximityInstructions() {
+        let toast = UILabel()
+        toast.text = "Tap furniture to see distances to walls & objects"
+        toast.font = .systemFont(ofSize: 15, weight: .medium)
+        toast.textColor = .white
+        toast.backgroundColor = AppColors.accent.withAlphaComponent(0.9)
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 12
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(toast)
+        
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toast.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+            toast.heightAnchor.constraint(equalToConstant: 40),
+            toast.widthAnchor.constraint(greaterThanOrEqualToConstant: 320)
+        ])
+        
+        UIView.animate(withDuration: 0.3, delay: 3.0) {
+            toast.alpha = 0
+        } completion: { _ in
+            toast.removeFromSuperview()
+        }
+        
+        // Also show all furniture proximity measurements immediately
+        showAllFurnitureProximity()
+    }
+    
+    private func setupProximityTapGesture() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleProximityTap(_:)))
+        arView.addGestureRecognizer(tap)
+        proximityTapGesture = tap
+    }
+    
+    private func removeProximityTapGesture() {
+        if let gesture = proximityTapGesture {
+            arView.removeGestureRecognizer(gesture)
+            proximityTapGesture = nil
+        }
+    }
+    
+    @objc private func handleProximityTap(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: arView)
+        
+        guard let tappedEntity = arView.entity(at: location) else { return }
+        
+        // Find if this entity is part of placed furniture
+        for furniture in placedFurniture {
+            if tappedEntity == furniture || isDescendant(tappedEntity, of: furniture) {
+                showProximityForFurniture(furniture)
+                return
+            }
+        }
+    }
+    
+    private func showProximityForFurniture(_ furniture: ModelEntity) {
+        // Clear previous indicators
+        proximitySystem.clearIndicators()
+        measurementLabel?.removeFromSuperview()
+        
+        // Get other furniture (excluding selected one)
+        let otherFurniture = placedFurniture.filter { $0 !== furniture }
+        
+        // Show proximity measurements
+        proximitySystem.showProximityForFurniture(
+            furniture,
+            roomModel: displayedModel,
+            otherFurniture: otherFurniture,
+            in: arView.scene
+        )
+        
+        // Show info toast
+        showProximityInfoToast(for: furniture)
+        
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+    }
+    
+    private func showAllFurnitureProximity() {
+        proximitySystem.showProximityForAllFurniture(
+            placedFurniture,
+            roomModel: displayedModel,
+            in: arView.scene
+        )
+    }
+    
+    private func showProximityInfoToast(for furniture: Entity) {
+        measurementLabel?.removeFromSuperview()
+        
+        let toast = UILabel()
+        toast.numberOfLines = 0
+        toast.text = "📐 Distances update in real-time as you move furniture\nTap 📏 again to exit"
+        toast.font = .systemFont(ofSize: 13, weight: .medium)
+        toast.textColor = .white
+        toast.backgroundColor = AppColors.accent.withAlphaComponent(0.95)
+        toast.textAlignment = .center
+        toast.layer.cornerRadius = 12
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(toast)
+        measurementLabel = toast
+        
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            toast.widthAnchor.constraint(lessThanOrEqualToConstant: 300)
+        ])
+    }
+    
+    // MARK: - Bounding Box Management
+    private func clearBoundingBoxes() {
+        for box in activeBoundingBoxes {
+            box.remove()
+        }
+        activeBoundingBoxes.removeAll()
+        selectedFurnitureForMeasurement = nil
+    }
+    
+    // MARK: - Point-to-Point Measurement
     private func showMeasurementInstructions() {
         let toast = UILabel()
         toast.text = "Tap two points to measure distance"
@@ -351,10 +923,9 @@ final class RoomVisualizeVC: UIViewController {
     }
 
     private func fitToScreen(_ model: ModelEntity) {
-        let bounds = model.visualBounds(relativeTo: nil)
-        let maxDim = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
-        guard maxDim > 0 else { return }
-        model.scale = .init(repeating: 0.6 / maxDim)
+        // Use RealWorldScaleManager to properly track the scale
+        let scaleFactor = scaleManager.setupRoomScale(for: model)
+        model.scale = .init(repeating: scaleFactor)
     }
 
     // MARK: - Camera
@@ -399,7 +970,12 @@ final class RoomVisualizeVC: UIViewController {
     private func insertFurniture(from url: URL) {
         Task {
             let model = try await ModelEntity(contentsOf: url)
-            model.scale = .init(repeating: 0.1)
+            
+            // Use RealWorldScaleManager to calculate proper scale
+            // This ensures furniture appears at realistic size relative to the room
+            let furnitureScale = scaleManager.calculateFurnitureScale(for: model)
+            model.scale = furnitureScale
+            
             model.generateCollisionShapes(recursive: true)
 
             let anchor = AnchorEntity(world: .zero)
@@ -407,6 +983,12 @@ final class RoomVisualizeVC: UIViewController {
             arView.scene.addAnchor(anchor)
 
             placedFurniture.append(model)
+            
+            // If proximity mode is active, add this furniture to tracking
+            if isProximityModeActive {
+                trackedFurnitureForProximity.append(model)
+            }
+            
             showControls(for: model)
         }
     }
