@@ -118,16 +118,8 @@ Envision/
 - ✅ Complete Profile tab with all sub-screens
 - ✅ Filter chips for categories
 - ✅ Consistent large title navigation
-- ✅ Quick Look & AR View for furniture models
-
-## 🔮 Roadmap
-
-- [ ] iCloud sync for models
-- [ ] Widget support
-- [ ] Siri shortcuts
-- [ ] Room comparison tool
-- [ ] Export all data as ZIP
-- [ ] Collaborative AR viewing (SharePlay)
+- ✅ Quick Look & AR View for furniture models\
+  
 
 ## 👥 Contributors
 
