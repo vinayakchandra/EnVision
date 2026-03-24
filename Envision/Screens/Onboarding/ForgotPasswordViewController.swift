@@ -63,6 +63,7 @@ final class ForgotPasswordViewController: UIViewController {
     }()
 
     private let continueButton = PrimaryButton1(title: "Continue")
+    private var isSending = false
 
     // MARK: - Lifecycle
 
@@ -154,6 +155,7 @@ final class ForgotPasswordViewController: UIViewController {
     }
 
     @objc private func handleReset() {
+        guard !isSending else { return }
         let email = emailField.textField.text ?? ""
 
         guard !email.isEmpty else {
@@ -163,14 +165,39 @@ final class ForgotPasswordViewController: UIViewController {
             return showError("Enter a valid email")
         }
 
-        // Hide error on success
         UIView.animate(withDuration: 0.2) { self.errorLabel.alpha = 0 }
+        setSending(true)
 
-        // TODO: trigger actual reset flow
+        AuthManager.shared.sendPasswordReset(email: email) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.setSending(false)
+                switch result {
+                case .success:
+                    let alert = UIAlertController(
+                        title: "Reset Email Sent",
+                        message: "Check your inbox for password reset instructions.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        self?.navigationController?.popViewController(animated: true)
+                    })
+                    self?.present(alert, animated: true)
+                case .failure(let error):
+                    self?.showError(error.localizedDescription)
+                }
+            }
+        }
     }
 
     private func showError(_ message: String) {
         errorLabel.text = message
         UIView.animate(withDuration: 0.25) { self.errorLabel.alpha = 1 }
+    }
+
+    private func setSending(_ sending: Bool) {
+        isSending = sending
+        emailField.textField.isEnabled = !sending
+        continueButton.isEnabled = !sending
+        continueButton.alpha = sending ? 0.7 : 1.0
     }
 }

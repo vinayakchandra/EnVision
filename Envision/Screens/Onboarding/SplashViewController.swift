@@ -7,6 +7,7 @@
 
 import Foundation
 import UIKit
+import FirebaseAuth
 
 class SplashViewController: UIViewController {
 
@@ -79,10 +80,12 @@ class SplashViewController: UIViewController {
     }
     private func goNext() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let nextVC = OnboardingController()
-            nextVC.modalPresentationStyle = .fullScreen
-            nextVC.modalTransitionStyle = .crossDissolve   // ← Apple-style fade
-            self.present(nextVC, animated: true)
+            // Keep authenticated users signed in across app relaunches.
+            if Auth.auth().currentUser != nil {
+                self.showMainApp()
+                return
+            }
+            self.showOnboarding()
         }
     }
 
@@ -120,5 +123,23 @@ class SplashViewController: UIViewController {
 
     private func navigateToOnboarding() {
         // handled by goNext() after animation
+    }
+
+    private func showOnboarding() {
+        let nextVC = OnboardingController()
+        nextVC.modalPresentationStyle = .fullScreen
+        nextVC.modalTransitionStyle = .crossDissolve
+        present(nextVC, animated: true)
+    }
+
+    private func showMainApp() {
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let sceneDelegate = scene.delegate as? SceneDelegate {
+            sceneDelegate.switchToMainApp()
+        } else {
+            let tabVC = MainTabBarController()
+            tabVC.modalPresentationStyle = .fullScreen
+            present(tabVC, animated: true)
+        }
     }
 }

@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import GoogleSignIn
 
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -18,8 +19,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
         let window = UIWindow(windowScene: windowScene)
-    window.rootViewController = SplashViewController()
-   //   window.rootViewController = MainTabBarController()
+        window.rootViewController = SplashViewController()
         self.window = window
         window.makeKeyAndVisible()
         
@@ -43,6 +43,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
            let window = windowScene.windows.first {
             window.overrideUserInterfaceStyle = style
         }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        GIDSignIn.sharedInstance.handle(url)
     }
     
     // Optional if you later handle login persistence

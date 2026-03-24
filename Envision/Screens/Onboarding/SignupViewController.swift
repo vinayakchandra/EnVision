@@ -114,7 +114,7 @@ final class SignupViewController: UIViewController {
             nameField, emailField, passwordField, confirmField,
             errorLabel, createButton,
             orLabel, continueLabel,
-            appleButton, googleButton
+            googleButton
         ].forEach { contentView.addSubview($0) }
 
         NSLayoutConstraint.activate([
@@ -156,14 +156,9 @@ final class SignupViewController: UIViewController {
                                         continueLabel.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 4),
                                         continueLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-                                        appleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
-                                        appleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-                                        appleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
-                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
-
-                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 18),
-                                        googleButton.leadingAnchor.constraint(equalTo: appleButton.leadingAnchor),
-                                        googleButton.trailingAnchor.constraint(equalTo: appleButton.trailingAnchor),
+                                        googleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
+                                        googleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        googleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
                                         googleButton.heightAnchor.constraint(equalToConstant: 50),
                                         googleButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
                                     ])
@@ -172,6 +167,7 @@ final class SignupViewController: UIViewController {
     // MARK: - Actions
     private func setupActions() {
         createButton.addTarget(self, action: #selector(handleSignup), for: .touchUpInside)
+        googleButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
 
     // MARK: - Signup Logic
@@ -196,21 +192,33 @@ final class SignupViewController: UIViewController {
 
         errorLabel.alpha = 0
 
-        // Signup using UserManager
-        UserManager.shared.signup(name: name, email: email, password: password) { [weak self] result in
+        AuthManager.shared.signUp(name: name, email: email, password: password) { [weak self] result in
             switch result {
             case .success(_):
-                // Navigate to main app
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let sceneDelegate = scene.delegate as? SceneDelegate {
-                    sceneDelegate.switchToMainApp()
-                } else {
-                    let homeVC = MainTabBarController()
-                    homeVC.modalPresentationStyle = .fullScreen
-                    self?.present(homeVC, animated: true)
+                DispatchQueue.main.async { self?.goToMainApp() }
+            case .failure(let error):
+                DispatchQueue.main.async { self?.showError(error.localizedDescription) }
+            }
+        }
+    }
+
+    @objc private func handleGoogleSignIn() {
+        errorLabel.alpha = 0
+        googleButton.isEnabled = false
+
+        AuthManager.shared.signInWithGoogle(presenting: self) { [weak self] result in
+            switch result {
+            case .success:
+                DispatchQueue.main.async {
+                    self?.googleButton.isEnabled = true
+                    self?.goToMainApp()
                 }
             case .failure(let error):
-                self?.showError(error.localizedDescription)
+                DispatchQueue.main.async {
+                    self?.googleButton.isEnabled = true
+                    self?.showError(error.localizedDescription)
+                    self?.showGoogleSignInErrorAlert(error)
+                }
             }
         }
     }
@@ -220,5 +228,29 @@ final class SignupViewController: UIViewController {
         UIView.animate(withDuration: 0.25) {
             self.errorLabel.alpha = 1
         }
+    }
+
+    private func goToMainApp() {
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let sceneDelegate = scene.delegate as? SceneDelegate {
+            sceneDelegate.switchToMainApp()
+        } else {
+            let homeVC = MainTabBarController()
+            homeVC.modalPresentationStyle = .fullScreen
+            present(homeVC, animated: true)
+        }
+    }
+
+    private func showGoogleSignInErrorAlert(_ error: Error) {
+        let nsError = error as NSError
+        let message = "\(error.localizedDescription)\n\nDomain: \(nsError.domain)\nCode: \(nsError.code)"
+
+        let alert = UIAlertController(
+            title: "Google Sign-In Failed",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
