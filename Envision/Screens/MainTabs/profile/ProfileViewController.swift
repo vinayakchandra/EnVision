@@ -4,10 +4,18 @@
 //
 
 import UIKit
+import FirebaseAuth
 
 class ProfileViewController: UIViewController {
 
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let tipContainerView: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = .clear
+        return view
+    }()
+    private var tipContainerBottomConstraint: NSLayoutConstraint?
 
     // MARK: - Profile Components
     private let profileHeaderView = UIView()
@@ -71,7 +79,29 @@ class ProfileViewController: UIViewController {
         setupTable()
         setupProfileHeader()
         setupFooter()
+        setupTipContainer()
         tableView.tableHeaderView = profileHeaderView
+        NotificationCenter.default.addObserver(self, selector: #selector(handleProfileDidUpdate), name: .profileDidUpdate, object: nil)
+        refreshProfileHeader()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: .profileDidUpdate, object: nil)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshProfileHeader()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        showContextualTips()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
     }
 
     // MARK: - Table Setup
@@ -89,6 +119,78 @@ class ProfileViewController: UIViewController {
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
+    }
+
+    private func setupTipContainer() {
+        view.addSubview(tipContainerView)
+        NSLayoutConstraint.activate([
+            tipContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            tipContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            tipContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+        ])
+
+        tipContainerBottomConstraint?.isActive = false
+        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
+        tipContainerBottomConstraint?.priority = .required
+        tipContainerBottomConstraint?.isActive = true
+    }
+
+    private func showContextualTips() {
+        guard isViewLoaded, view.window != nil else { return }
+
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
+
+        let orderedTips: [TipDefinition] = [
+            AppTips.profileIntro,
+            AppTips.profileSettings,
+            AppTips.profileTheme,
+            AppTips.profileNotifications,
+            AppTips.profileTipsLibrary,
+            AppTips.profileRestartTour,
+            AppTips.profileExportData,
+            AppTips.profileSupport
+        ]
+
+        if let tip = orderedTips.first(where: { !TourManager.shared.hasSeen(tipID: $0.id) }) {
+            showTip(tip) { [weak self] in
+                guard let self else { return }
+                switch tip.id {
+                case AppTips.profileSettings.id, AppTips.profileTheme.id:
+                    self.navigationController?.pushViewController(AppearanceViewController(), animated: true)
+                case AppTips.profileTipsLibrary.id:
+                    self.navigationController?.pushViewController(TipsLibraryViewController(), animated: true)
+                default:
+                    break
+                }
+            }
+            return
+        }
+
+        if !TourManager.shared.hasCompletedTour && AppTips.allTipIDs.allSatisfy({ TourManager.shared.hasSeen(tipID: $0) }) {
+            TourManager.shared.completeTour()
+        }
+    }
+
+    private func showTip(_ tip: TipDefinition, action: @escaping () -> Void) {
+        tipContainerBottomConstraint?.isActive = false
+        tipContainerBottomConstraint = nil
+
+        let config = TipBubbleView.Configuration(
+            title: tip.title,
+            message: tip.message,
+            primaryActionTitle: tip.primaryActionTitle,
+            dismissActionTitle: tip.dismissActionTitle,
+            arrowEdge: tip.arrowEdge,
+            arrowOffset: tip.arrowOffset
+        )
+
+        TipCoordinator.shared.showTip(
+            id: tip.id,
+            configuration: config,
+            in: self,
+            containerView: tipContainerView,
+            onPrimaryAction: action
+        )
     }
 
     // MARK: - Profile Header Setup
@@ -124,10 +226,10 @@ class ProfileViewController: UIViewController {
         ])
 
         // MARK: - Name & Email
-        nameLabel.text = "Shaurya"
+        nameLabel.text = "User"
         nameLabel.font = .boldSystemFont(ofSize: 22)
 
-        emailLabel.text = "shaurya@gmail.com"
+        emailLabel.text = "No email"
         emailLabel.font = .systemFont(ofSize: 14)
         emailLabel.textColor = .secondaryLabel
 
@@ -151,6 +253,73 @@ class ProfileViewController: UIViewController {
         ])
     }
 
+    private func refreshProfileHeader() {
+        if let firebaseUser = Auth.auth().currentUser {
+            let resolvedName = firebaseUser.displayName
+                ?? firebaseUser.email?.components(separatedBy: "@").first?.capitalized
+                ?? "User"
+            nameLabel.text = resolvedName
+            emailLabel.text = firebaseUser.email ?? "No email"
+
+            let syncedUser = UserModel(
+                id: firebaseUser.uid,
+                name: resolvedName,
+                email: firebaseUser.email ?? ""
+            )
+            UserManager.shared.currentUser = syncedUser
+
+            if let localImage = UserManager.shared.loadProfileImage() {
+                profileImageView.image = localImage
+                profileImageView.tintColor = nil
+            } else if let photoURL = firebaseUser.photoURL {
+                loadProfileImage(from: photoURL)
+            } else {
+                profileImageView.image = UIImage(systemName: "person.crop.circle.fill")
+                profileImageView.tintColor = .systemGray4
+            }
+            return
+        }
+
+        if let user = UserManager.shared.currentUser {
+            nameLabel.text = user.name
+            emailLabel.text = user.email
+
+            if let localImage = UserManager.shared.loadProfileImage() {
+                profileImageView.image = localImage
+                profileImageView.tintColor = nil
+            } else {
+                profileImageView.image = UIImage(systemName: "person.crop.circle.fill")
+                profileImageView.tintColor = .systemGray4
+            }
+            return
+        }
+
+        nameLabel.text = "User"
+        emailLabel.text = "No email"
+        profileImageView.image = UIImage(systemName: "person.crop.circle.fill")
+        profileImageView.tintColor = .systemGray4
+    }
+
+    private func loadProfileImage(from url: URL) {
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard
+                let self,
+                let data,
+                let image = UIImage(data: data)
+            else { return }
+
+            DispatchQueue.main.async {
+                self.profileImageView.image = image
+                self.profileImageView.tintColor = nil
+            }
+        }.resume()
+    }
+
+    @objc private func handleProfileDidUpdate() {
+        refreshProfileHeader()
+        tableView.reloadData()
+    }
+
     // Logout
     private func handleLogout() {
         let alert = UIAlertController(
@@ -169,9 +338,18 @@ class ProfileViewController: UIViewController {
     }
 
     private func performLogout() {
-        // UserManager.shared.logout()
-        print("perform logout")
-        print("navigating to login screen")
+        do {
+            try AuthManager.shared.signOut()
+        } catch {
+            let alert = UIAlertController(
+                title: "Sign Out Failed",
+                message: error.localizedDescription,
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
+        }
 
         // Navigate back to login
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,

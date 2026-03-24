@@ -10,7 +10,7 @@ final class MainTabBarController: UITabBarController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Intentionally no global overlay tips here.
+        showWelcomeTipIfNeeded()
     }
 
     private func setupTabs() {
@@ -50,5 +50,29 @@ final class MainTabBarController: UITabBarController {
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
         tabBar.isTranslucent = true
+    }
+
+    private func showWelcomeTipIfNeeded() {
+        guard !TourManager.shared.hasSeen(tipID: AppTips.welcome.id) else { return }
+        guard !TourManager.shared.tourSkipped, !TourManager.shared.hasCompletedTour else { return }
+        guard presentedViewController == nil else { return }
+
+        let alert = UIAlertController(
+            title: AppTips.welcome.title,
+            message: AppTips.welcome.message,
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(title: AppTips.welcome.primaryActionTitle, style: .default) { _ in
+            TourManager.shared.startTour()
+            TourManager.shared.markTipAsSeen(AppTips.welcome.id)
+        })
+
+        alert.addAction(UIAlertAction(title: AppTips.welcome.dismissActionTitle, style: .cancel) { _ in
+            TourManager.shared.markTipAsSeen(AppTips.welcome.id)
+            TourManager.shared.skipTour()
+        })
+
+        present(alert, animated: true)
     }
 }

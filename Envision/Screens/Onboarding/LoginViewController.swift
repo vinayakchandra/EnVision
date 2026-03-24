@@ -108,10 +108,8 @@ final class LoginViewController: UIViewController {
 
     private func setupUI() {
         [logoImageView, titleLabel, emailField, passwordField, errorLabel, continueButton,
-         forgotPasswordButton, createAccountButton, appleButton, googleButton
+         forgotPasswordButton, createAccountButton, googleButton
         ].forEach { contentView.addSubview($0) }
-
-        appleButton.tintColor = .black
         NSLayoutConstraint.activate([
                                         logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
                                         logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -143,14 +141,9 @@ final class LoginViewController: UIViewController {
                                         createAccountButton.centerYAnchor.constraint(equalTo: forgotPasswordButton.centerYAnchor),
                                         createAccountButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
 
-                                        appleButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
-                                        appleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
-                                        appleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
-
-                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 18),
-                                        googleButton.leadingAnchor.constraint(equalTo: appleButton.leadingAnchor),
-                                        googleButton.trailingAnchor.constraint(equalTo: appleButton.trailingAnchor),
+                                        googleButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
+                                        googleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
+                                        googleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
                                         googleButton.heightAnchor.constraint(equalToConstant: 50),
 
                                         googleButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
@@ -162,6 +155,7 @@ final class LoginViewController: UIViewController {
         continueButton.addTarget(self, action: #selector(handleLogin), for: .touchUpInside)
         createAccountButton.addTarget(self, action: #selector(goToSignup), for: .touchUpInside)
         forgotPasswordButton.addTarget(self, action: #selector(goToForgotPassword), for: .touchUpInside)
+        googleButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
 
     @objc private func handleLogin() {
@@ -174,22 +168,33 @@ final class LoginViewController: UIViewController {
         // Hide any previous error
         errorLabel.alpha = 0
 
-        // Login using UserManager
-        UserManager.shared.login(email: email, password: password) { [weak self] result in
+        AuthManager.shared.signIn(email: email, password: password) { [weak self] result in
             switch result {
             case .success(_):
-                // Switch to main app (Tab Bar) post-login
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let sceneDelegate = scene.delegate as? SceneDelegate {
-                    sceneDelegate.switchToMainApp()
-                } else {
-                    // Fallback: present tab bar modally
-                    let tab = MainTabBarController()
-                    tab.modalPresentationStyle = .fullScreen
-                    self?.present(tab, animated: true)
+                DispatchQueue.main.async { self?.goToMainApp() }
+            case .failure(let error):
+                DispatchQueue.main.async { self?.showError(error.localizedDescription) }
+            }
+        }
+    }
+
+    @objc private func handleGoogleSignIn() {
+        errorLabel.alpha = 0
+        googleButton.isEnabled = false
+
+        AuthManager.shared.signInWithGoogle(presenting: self) { [weak self] result in
+            switch result {
+            case .success:
+                DispatchQueue.main.async {
+                    self?.googleButton.isEnabled = true
+                    self?.goToMainApp()
                 }
             case .failure(let error):
-                self?.showError(error.localizedDescription)
+                DispatchQueue.main.async {
+                    self?.googleButton.isEnabled = true
+                    self?.showError(error.localizedDescription)
+                    self?.showGoogleSignInErrorAlert(error)
+                }
             }
         }
     }
@@ -211,6 +216,30 @@ final class LoginViewController: UIViewController {
         errorLabel.text = message
         UIView.animate(withDuration: 0.25) { self.errorLabel.alpha = 1 }
     }
+
+    private func goToMainApp() {
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let sceneDelegate = scene.delegate as? SceneDelegate {
+            sceneDelegate.switchToMainApp()
+        } else {
+            let tab = MainTabBarController()
+            tab.modalPresentationStyle = .fullScreen
+            present(tab, animated: true)
+        }
+    }
+
+    private func showGoogleSignInErrorAlert(_ error: Error) {
+        let nsError = error as NSError
+        let message = "\(error.localizedDescription)\n\nDomain: \(nsError.domain)\nCode: \(nsError.code)"
+
+        let alert = UIAlertController(
+            title: "Google Sign-In Failed",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
 }
 
 
@@ -224,4 +253,3 @@ extension LoginViewController: UITextFieldDelegate {
         return true
     }
 }
-

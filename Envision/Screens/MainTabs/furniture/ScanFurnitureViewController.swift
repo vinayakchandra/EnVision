@@ -19,6 +19,13 @@ final class ScanFurnitureViewController: UIViewController {
     private var activityIndicator: UIActivityIndicatorView!
     private var loadingLabel: UILabel!
     private var emptyStateView: UIView!
+    private let tipContainerView: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = .clear
+        return view
+    }()
+    private var tipContainerBottomConstraint: NSLayoutConstraint?
 
     private let searchController = UISearchController(searchResultsController: nil)
 
@@ -113,6 +120,7 @@ final class ScanFurnitureViewController: UIViewController {
         setupRefreshControl()
         setupLoadingOverlay()
         setupEmptyState()
+        setupTipContainer()
 
         loadFurnitureFiles(from: furnitureFolderURL())
     }
@@ -124,6 +132,16 @@ final class ScanFurnitureViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         // Reload when returning from capture
         loadFurnitureFiles(from: furnitureFolderURL())
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        showContextualTips()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
     }
 
     private func setupRefreshControl() {
@@ -210,6 +228,7 @@ final class ScanFurnitureViewController: UIViewController {
 
     // MARK: - Menu Actions
     @objc private func enableMultipleSelection() {
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
         collectionView.allowsMultipleSelection = true
 
         let doneBtn = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(disableMultipleSelection))
@@ -231,6 +250,7 @@ final class ScanFurnitureViewController: UIViewController {
         }
 
         setupNavigationBar()
+        showContextualTips()
     }
 
     @objc private func deleteSelectedModels() {
@@ -574,6 +594,7 @@ final class ScanFurnitureViewController: UIViewController {
 
                 self.hideLoading()
                 self.updateEmptyState()
+                self.showContextualTips()
 
                 // End refreshing animation
                 if self.refreshControl.isRefreshing {
@@ -707,6 +728,90 @@ final class ScanFurnitureViewController: UIViewController {
                 toast.removeFromSuperview()
             }
         }
+    }
+
+    // MARK: - Tips
+    private func setupTipContainer() {
+        view.addSubview(tipContainerView)
+        NSLayoutConstraint.activate([
+            tipContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            tipContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            tipContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+        ])
+
+        tipContainerBottomConstraint?.isActive = false
+        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
+        tipContainerBottomConstraint?.priority = .required
+        tipContainerBottomConstraint?.isActive = true
+    }
+
+    private func showContextualTips() {
+        guard isViewLoaded, view.window != nil else { return }
+
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
+
+        if collectionView.allowsMultipleSelection {
+            return
+        }
+
+        if furnitureFiles.isEmpty {
+            if let tip = firstUnseen(from: [
+                AppTips.furnitureIntro,
+                AppTips.furnitureAutomaticCapture,
+                AppTips.furnitureFromPhotos,
+                AppTips.furnitureImportUSDZ
+            ]) {
+                showTip(tip) { [weak self] in
+                    switch tip.id {
+                    case AppTips.furnitureIntro.id, AppTips.furnitureAutomaticCapture.id:
+                        self?.automaticCaptureTapped()
+                    case AppTips.furnitureFromPhotos.id:
+                        self?.createFromPhotosTapped()
+                    case AppTips.furnitureImportUSDZ.id:
+                        self?.importUSDZTapped()
+                    default:
+                        break
+                    }
+                }
+            }
+            return
+        }
+
+        if let tip = firstUnseen(from: [
+            AppTips.furnitureQuality,
+            AppTips.furniturePhotoCount,
+            AppTips.furnitureLighting,
+            AppTips.furnitureCoverage,
+            AppTips.furnitureCategories
+        ]) {
+            showTip(tip) {}
+        }
+    }
+
+    private func firstUnseen(from tips: [TipDefinition]) -> TipDefinition? {
+        tips.first { !TourManager.shared.hasSeen(tipID: $0.id) }
+    }
+
+    private func showTip(_ tip: TipDefinition, action: @escaping () -> Void) {
+        tipContainerBottomConstraint?.isActive = false
+        tipContainerBottomConstraint = nil
+
+        let config = TipBubbleView.Configuration(
+            title: tip.title,
+            message: tip.message,
+            primaryActionTitle: tip.primaryActionTitle,
+            dismissActionTitle: tip.dismissActionTitle,
+            arrowEdge: tip.arrowEdge,
+            arrowOffset: tip.arrowOffset
+        )
+
+        TipCoordinator.shared.showTip(
+            id: tip.id,
+            configuration: config,
+            in: self,
+            containerView: tipContainerView,
+            onPrimaryAction: action
+        )
     }
 }
 
@@ -1089,4 +1194,3 @@ final class FurnitureChipCell: UICollectionViewCell {
         button.setAttributedTitle(attributedString, for: .normal)
     }
 }
-

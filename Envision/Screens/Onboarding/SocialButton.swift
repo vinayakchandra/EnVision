@@ -26,6 +26,7 @@ final class SocialButton: UIButton {
         hStack.axis = .horizontal
         hStack.alignment = .center
         hStack.spacing = 12
+        hStack.isUserInteractionEnabled = false
         hStack.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(hStack)

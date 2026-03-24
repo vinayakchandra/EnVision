@@ -7,7 +7,6 @@
 //
 
 import Foundation
-// TipKit temporarily removed from the project.
 
 /// Centralized manager for tour state, progress tracking, and tour lifecycle
 final class TourManager {
@@ -15,6 +14,7 @@ final class TourManager {
     // MARK: - Singleton
     
     static let shared = TourManager()
+    private let tipsEnabled = false
     
     // MARK: - Private Properties
     
@@ -23,6 +23,8 @@ final class TourManager {
     private let tourStepKey = "current_tour_step"
     private let hasSeenWelcomeKey = "has_seen_welcome"
     private let firstLaunchKey = "is_first_launch"
+    private let seenTipsKey = "seen_tips"
+    private let tourSkippedKey = "tour_skipped"
     
     // MARK: - Public Properties
     
@@ -30,6 +32,12 @@ final class TourManager {
     var isTourCompleted: Bool {
         get { userDefaults.bool(forKey: tourCompletedKey) }
         set { userDefaults.set(newValue, forKey: tourCompletedKey) }
+    }
+
+    /// Alias used by tips flow documentation.
+    var hasCompletedTour: Bool {
+        get { isTourCompleted }
+        set { isTourCompleted = newValue }
     }
     
     /// Current step in the tour sequence (0-based)
@@ -42,6 +50,23 @@ final class TourManager {
     var hasSeenWelcome: Bool {
         get { userDefaults.bool(forKey: hasSeenWelcomeKey) }
         set { userDefaults.set(newValue, forKey: hasSeenWelcomeKey) }
+    }
+
+    /// Whether user skipped the tour explicitly.
+    var tourSkipped: Bool {
+        get { userDefaults.bool(forKey: tourSkippedKey) }
+        set { userDefaults.set(newValue, forKey: tourSkippedKey) }
+    }
+
+    /// Set of tip IDs that have already been shown/dismissed.
+    var seenTips: Set<String> {
+        get {
+            let ids = userDefaults.stringArray(forKey: seenTipsKey) ?? []
+            return Set(ids)
+        }
+        set {
+            userDefaults.set(Array(newValue), forKey: seenTipsKey)
+        }
     }
     
     /// Whether this is the first app launch
@@ -64,8 +89,12 @@ final class TourManager {
     /// Determines if the tour should be shown
     /// - Returns: Bool indicating if tour should be shown
     func shouldShowTour() -> Bool {
+        if !tipsEnabled {
+            return false
+        }
+
         // Don't show if already completed
-        if isTourCompleted {
+        if isTourCompleted || tourSkipped {
             return false
         }
         
@@ -75,8 +104,10 @@ final class TourManager {
     
     /// Initiates the tour sequence
     func startTour() {
+        guard tipsEnabled else { return }
         currentTourStep = 0
         isTourCompleted = false
+        tourSkipped = false
         hasSeenWelcome = true
         isFirstLaunch = false
         print("🎬 Tour started")
@@ -84,24 +115,34 @@ final class TourManager {
     
     /// Marks the tour as completed
     func completeTour() {
+        guard tipsEnabled else { return }
         isTourCompleted = true
         currentTourStep = 0
+        tourSkipped = false
         print(" Tour completed")
     }
     
     /// Resets all tour progress and tips
     func resetTour() {
+        guard tipsEnabled else { return }
         isTourCompleted = false
         currentTourStep = 0
         hasSeenWelcome = false
-
-        // TipKit temporarily removed from the project.
+        tourSkipped = false
+        seenTips = []
 
         print("🔄 Tour reset complete")
+    }
+
+    func skipTour() {
+        guard tipsEnabled else { return }
+        tourSkipped = true
+        print(" Tour skipped")
     }
     
     /// Advances to the next tour step
     func nextStep() {
+        guard tipsEnabled else { return }
         currentTourStep += 1
         print(" Tour step: \(currentTourStep)")
     }
@@ -109,8 +150,25 @@ final class TourManager {
     /// Skips to a specific step
     /// - Parameter step: The step number to skip to
     func skipToStep(_ step: Int) {
+        guard tipsEnabled else { return }
         currentTourStep = step
         print(" Skipped to step: \(step)")
+    }
+
+    // MARK: - Tip Persistence
+
+    func hasSeen(tipID: String) -> Bool {
+        if !tipsEnabled {
+            return true
+        }
+        return seenTips.contains(tipID)
+    }
+
+    func markTipAsSeen(_ tipID: String) {
+        guard tipsEnabled else { return }
+        var seen = seenTips
+        seen.insert(tipID)
+        seenTips = seen
     }
     
     // MARK: - Helper Methods
@@ -150,8 +208,10 @@ final class TourManager {
         ═══════════════════════════════════
         Is First Launch: \(isFirstLaunch)
         Tour Completed: \(isTourCompleted)
+        Tour Skipped: \(tourSkipped)
         Current Step: \(currentTourStep)
         Has Seen Welcome: \(hasSeenWelcome)
+        Seen Tips Count: \(seenTips.count)
         Should Show Tour: \(shouldShowTour())
         Has Rooms: \(hasRooms())
         Has Furniture: \(hasFurniture())

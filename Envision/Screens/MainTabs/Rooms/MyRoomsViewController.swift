@@ -8,7 +8,6 @@ import RoomPlan
 import QuickLook
 import QuickLookThumbnailing
 import UniformTypeIdentifiers
-// TipKit temporarily removed from the project.
 
 final class MyRoomsViewController: UIViewController {
 
@@ -21,8 +20,7 @@ final class MyRoomsViewController: UIViewController {
     private var refreshControl: UIRefreshControl!
     var previewURL: URL!
     private var emptyStateView: UIView!
-
-    // Tips temporarily removed
+    private var tipContainerBottomConstraint: NSLayoutConstraint?
 
     // MARK: - Data
     var roomFiles: [URL] = []
@@ -82,8 +80,6 @@ final class MyRoomsViewController: UIViewController {
             name: Notification.Name("RoomThumbnailDidUpdate"),
             object: nil
         )
-
-        // Tips temporarily removed
     }
     
     @objc private func handleThumbnailUpdate(_ notification: Notification) {
@@ -115,12 +111,13 @@ final class MyRoomsViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Tips temporarily removed
+        showContextualTips()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // Tips temporarily removed
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
+        updateCollectionInsetsForTip(height: 0)
     }
 
     private func setupUI() {
@@ -134,8 +131,7 @@ final class MyRoomsViewController: UIViewController {
         setupRefreshControl()
         setupLoadingOverlay()
         setupEmptyState()
-
-        // Tips temporarily removed
+        setupTipContainer()
     }
 
     private func setupNavigationBar() {
@@ -312,6 +308,7 @@ final class MyRoomsViewController: UIViewController {
 
     private func enableMultipleSelection() {
         isSelectionMode = true
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
         collectionView.allowsMultipleSelection = true
 
         // Show circles on visible cells
@@ -348,6 +345,7 @@ final class MyRoomsViewController: UIViewController {
             .forEach { collectionView.deselectItem(at: $0, animated: false) }
 
         setupNavigationBar()
+        showContextualTips()
     }
 
     @objc private func deleteSelectedRooms() {
@@ -423,6 +421,7 @@ final class MyRoomsViewController: UIViewController {
                 self.hideLoading()
                 self.refreshControl.endRefreshing()
                 self.updateEmptyState()
+                self.showContextualTips()
             }
         }
     }
@@ -743,6 +742,101 @@ final class MyRoomsViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    // MARK: - Tips
+    private func setupTipContainer() {
+        view.addSubview(tipContainerView)
+        NSLayoutConstraint.activate([
+            tipContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            tipContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            tipContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+        ])
+
+        tipContainerBottomConstraint?.isActive = false
+        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
+        tipContainerBottomConstraint?.priority = .required
+        tipContainerBottomConstraint?.isActive = true
+    }
+
+    private func showContextualTips() {
+        guard isViewLoaded, view.window != nil else { return }
+
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
+        updateCollectionInsetsForTip(height: 0)
+
+        if isSelectionMode {
+            return
+        }
+
+        if roomFiles.isEmpty {
+            if let tip = firstUnseen(from: [AppTips.roomsIntro, AppTips.roomScanSlowly]) {
+                showTip(tip) { [weak self] in
+                    self?.scanTapped()
+                }
+            }
+            return
+        }
+
+        if roomFiles.count == 1 {
+            if let tip = firstUnseen(from: [AppTips.roomImport, AppTips.roomActions]) {
+                showTip(tip) { [weak self] in
+                    if tip.id == AppTips.roomImport.id {
+                        self?.importTapped()
+                    }
+                }
+            }
+            return
+        }
+
+        if let tip = firstUnseen(from: [
+            AppTips.roomCategories,
+            AppTips.roomSearch,
+            AppTips.roomDetail,
+            AppTips.roomARPreview
+        ]) {
+            showTip(tip) {}
+        }
+    }
+
+    private func firstUnseen(from tips: [TipDefinition]) -> TipDefinition? {
+        tips.first { !TourManager.shared.hasSeen(tipID: $0.id) }
+    }
+
+    private func showTip(_ tip: TipDefinition, action: @escaping () -> Void) {
+        tipContainerBottomConstraint?.isActive = false
+        tipContainerBottomConstraint = nil
+
+        let configuration = TipBubbleView.Configuration(
+            title: tip.title,
+            message: tip.message,
+            primaryActionTitle: tip.primaryActionTitle,
+            dismissActionTitle: tip.dismissActionTitle,
+            arrowEdge: tip.arrowEdge,
+            arrowOffset: tip.arrowOffset
+        )
+
+        TipCoordinator.shared.showTip(
+            id: tip.id,
+            configuration: configuration,
+            in: self,
+            containerView: tipContainerView,
+            onPrimaryAction: action,
+            onDismiss: { [weak self] in
+                self?.updateCollectionInsetsForTip(height: 0)
+            },
+            onPresented: { [weak self] height in
+                self?.updateCollectionInsetsForTip(height: height + 10)
+            }
+        )
+    }
+
+    private func updateCollectionInsetsForTip(height: CGFloat) {
+        var inset = collectionView.contentInset
+        if abs(inset.top - height) <= 0.5 { return }
+        inset.top = max(0, height)
+        collectionView.contentInset = inset
+        collectionView.scrollIndicatorInsets = inset
+    }
+
     var allChipsData: [(title: String, icon: String, category: RoomCategory?, roomType: RoomType?)] {
         var chips: [(String, String, RoomCategory?, RoomType?)] = []
 
@@ -765,17 +859,16 @@ final class MyRoomsViewController: UIViewController {
         return chips
     }
 
-    // MARK: - Tips container (kept but unused; can be removed later safely)
+    // MARK: - Tips Container
     private let tipContainerView: UIView = {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
         v.backgroundColor = .clear
         v.isUserInteractionEnabled = true
-        v.isHidden = true
+        v.isHidden = false
         return v
     }()
 
-    private var tipContainerBottomConstraint: NSLayoutConstraint?
 }
 
 // MARK: - Models
@@ -840,133 +933,3 @@ final class ChipCell: UICollectionViewCell {
         button.setAttributedTitle(attributedString, for: .normal)
     }
 }
-
-// MARK: - TipKit Integration (temporarily removed)
-// @available(iOS 17.0, *)
-// extension MyRoomsViewController {
-//
-//     private func setupTips() {
-//         // Create presenter for the screen-level tip container.
-//         if tipPresenter == nil {
-//             tipPresenter = TipPresenter(owner: self, containerView: tipContainerView)
-//         }
-//     }
-//
-//     private func updateTipParameters() {
-//         MyRoomsIntroTip.hasRooms = !roomFiles.isEmpty
-//         RoomActionsMenuTip.roomCount = roomFiles.count
-//         RoomCategoriesTip.roomCount = roomFiles.count
-//         RoomImportTip.hasScannedRoom = !roomFiles.isEmpty
-//     }
-//
-//     private func showContextualTip() {
-//         // Avoid showing tips while selecting or presenting another VC.
-//         if isSelectionMode { dismissTip(); return }
-//         if presentedViewController != nil { return }
-//
-//         updateTipParameters()
-//
-//         // Ensure any old SwiftUI-hosted tips are removed if they still exist (prevents ghost text).
-//         tipContainerView.subviews.forEach { $0.removeFromSuperview() }
-//
-//         // Determine which tip to show (screen decides; TipPresenter just renders).
-//         var title: String?
-//         var message: String?
-//         var image: String?
-//         var actions: [TipPresenter.Action] = []
-//
-//         if roomFiles.isEmpty {
-//             title = "📐 Scan Your First Room"
-//             message = "Tap the green camera button to start scanning any room using your iPhone's LiDAR sensor. We'll create a precise 3D model!"
-//             image = "camera.viewfinder"
-//             actions = [
-//                 .init(id: "scan", title: "Scan Now"),
-//                 .init(id: "later", title: "Maybe Later")
-//             ]
-//         } else if roomFiles.count == 1 {
-//             title = "📥 Already Have 3D Models?"
-//             message = "Tap the blue import button to bring in existing USDZ room models from your Files app."
-//             image = "square.and.arrow.down"
-//             actions = [
-//                 .init(id: "import", title: "Import"),
-//                 .init(id: "later", title: "Later")
-//             ]
-//         } else if roomFiles.count >= 2 {
-//             title = "🏷️ Organize Your Spaces"
-//             message = "Use category chips to filter rooms by type. Long-press any room to edit its category and add custom tags."
-//             image = "tag.fill"
-//             actions = [
-//                 .init(id: "got-it", title: "Got it")
-//             ]
-//         }
-//
-//         guard let title else { return }
-//
-//         tipContainerView.isHidden = false
-//         setupTips()
-//
-//         let height = tipPresenter?.present(
-//             title: title,
-//             message: message,
-//             systemImageName: image,
-//             actions: actions
-//         ) { [weak self] actionId in
-//             self?.handleTipActionId(actionId)
-//         } ?? 0
-//
-//         // Expand container to fit tip height, then update insets.
-//         tipContainerBottomConstraint?.isActive = false
-//         tipContainerBottomConstraint = tipContainerView.heightAnchor.constraint(equalToConstant: max(0, height))
-//         tipContainerBottomConstraint?.priority = .required
-//         tipContainerBottomConstraint?.isActive = true
-//
-//         updateCollectionInsetsForTip(containerHeight: height)
-//     }
-//
-//     private func updateCollectionInsetsForTip(containerHeight: CGFloat) {
-//         guard let collectionView else { return }
-//         let topInset = max(0, containerHeight) + 12
-//         var inset = collectionView.contentInset
-//         if abs(inset.top - topInset) > 1 {
-//             inset.top = topInset
-//             collectionView.contentInset = inset
-//             collectionView.scrollIndicatorInsets = inset
-//         }
-//     }
-//
-//     private func dismissTip() {
-//         tipPresenter?.dismiss()
-//         tipContainerView.subviews.forEach { $0.removeFromSuperview() }
-//         tipContainerView.isHidden = true
-//
-//         // Collapse container.
-//         tipContainerBottomConstraint?.isActive = false
-//         tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
-//         tipContainerBottomConstraint?.isActive = true
-//
-//         // Reset insets.
-//         if let collectionView {
-//             var inset = collectionView.contentInset
-//             if inset.top != 0 {
-//                 inset.top = 0
-//                 collectionView.contentInset = inset
-//                 collectionView.scrollIndicatorInsets = inset
-//             }
-//         }
-//     }
-//
-//     private func handleTipActionId(_ id: String) {
-//         switch id {
-//         case "scan":
-//             dismissTip()
-//             scanTapped()
-//         case "import":
-//             dismissTip()
-//             importTapped()
-//         case "later", "got-it":
-//             dismissTip()
-//         default:
-//             dismissTip()
-//         }
-//     }
-// }
