@@ -46,7 +46,6 @@ class ProfileViewController: UIViewController {
     private let items: [Section: [(icon: String, title: String, isDestructive: Bool)]] = [
         .account: [
             ("person.crop.circle", "My Profile", false),
-            ("envelope.fill", "Email & Password", false),
         ],
         .preferences: [
             ("paintbrush.fill", "Appearance", false),
@@ -82,11 +81,13 @@ class ProfileViewController: UIViewController {
         setupTipContainer()
         tableView.tableHeaderView = profileHeaderView
         NotificationCenter.default.addObserver(self, selector: #selector(handleProfileDidUpdate), name: .profileDidUpdate, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleTourDidStart), name: .tourDidStart, object: nil)
         refreshProfileHeader()
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self, name: .profileDidUpdate, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .tourDidStart, object: nil)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -102,6 +103,7 @@ class ProfileViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         TipCoordinator.shared.dismissTip(from: tipContainerView)
+        updateTableInsetsForTip(height: 0)
     }
 
     // MARK: - Table Setup
@@ -159,6 +161,10 @@ class ProfileViewController: UIViewController {
                     self.navigationController?.pushViewController(AppearanceViewController(), animated: true)
                 case AppTips.profileTipsLibrary.id:
                     self.navigationController?.pushViewController(TipsLibraryViewController(), animated: true)
+                case AppTips.profileRestartTour.id:
+                    TourManager.shared.resetTour()
+                    // Pop back to root so the welcome tip re-fires in MainTabBarController
+                    self.navigationController?.popToRootViewController(animated: true)
                 default:
                     break
                 }
@@ -166,7 +172,7 @@ class ProfileViewController: UIViewController {
             return
         }
 
-        if !TourManager.shared.hasCompletedTour && AppTips.allTipIDs.allSatisfy({ TourManager.shared.hasSeen(tipID: $0) }) {
+        if !TourManager.shared.hasCompletedTour && AppTips.completionTipIDs.allSatisfy({ TourManager.shared.hasSeen(tipID: $0) }) {
             TourManager.shared.completeTour()
         }
     }
@@ -189,8 +195,30 @@ class ProfileViewController: UIViewController {
             configuration: config,
             in: self,
             containerView: tipContainerView,
-            onPrimaryAction: action
+            onPrimaryAction: action,
+            onDismiss: { [weak self] in
+                self?.updateTableInsetsForTip(height: 0)
+                self?.reestablishZeroHeightConstraint()
+            },
+            onPresented: { [weak self] height in
+                self?.updateTableInsetsForTip(height: height + 10)
+            }
         )
+    }
+
+    private func updateTableInsetsForTip(height: CGFloat) {
+        var inset = tableView.contentInset
+        guard abs(inset.top - height) > 0.5 else { return }
+        inset.top = max(0, height)
+        tableView.contentInset = inset
+        tableView.scrollIndicatorInsets = inset
+    }
+
+    private func reestablishZeroHeightConstraint() {
+        guard tipContainerBottomConstraint == nil else { return }
+        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
+        tipContainerBottomConstraint?.priority = .required
+        tipContainerBottomConstraint?.isActive = true
     }
 
     // MARK: - Profile Header Setup
@@ -320,6 +348,10 @@ class ProfileViewController: UIViewController {
         tableView.reloadData()
     }
 
+    @objc private func handleTourDidStart() {
+        showContextualTips()
+    }
+
     // Logout
     private func handleLogout() {
         let alert = UIAlertController(
@@ -434,9 +466,6 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
         case (.account, "My Profile"):
             editProfileTapped()
 
-        case (.account, "Email & Password"):
-            navigationController?.pushViewController(EmailPasswordViewController(), animated: true)
-
         case (.preferences, "Appearance"):
             navigationController?.pushViewController(AppearanceViewController(), animated: true)
 
@@ -486,7 +515,13 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
             TourManager.shared.resetTour()
             
             let confirm = UIAlertController(title: "Tour Reset", message: "The app tour will appear again as you navigate.", preferredStyle: .alert)
-            confirm.addAction(UIAlertAction(title: "OK", style: .default))
+            confirm.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+                guard let self else { return }
+                self.tabBarController?.selectedIndex = 0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    (self.tabBarController as? MainTabBarController)?.showWelcomeTipIfNeeded()
+                }
+            })
             self.present(confirm, animated: true)
         })
         

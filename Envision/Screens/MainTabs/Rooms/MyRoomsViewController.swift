@@ -34,6 +34,7 @@ final class MyRoomsViewController: UIViewController {
         cache.totalCostLimit = 50 * 1024 * 1024
         return cache
     }()
+    private var inFlightThumbnailRequests: [URL: [(UIImage?) -> Void]] = [:]
     var isSelectionMode = false
 
     private var isSearching: Bool {
@@ -80,6 +81,21 @@ final class MyRoomsViewController: UIViewController {
             name: Notification.Name("RoomThumbnailDidUpdate"),
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTourDidStart),
+            name: .tourDidStart,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: Notification.Name("RoomThumbnailDidUpdate"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: .tourDidStart, object: nil)
+    }
+
+    @objc private func handleTourDidStart() {
+        showContextualTips()
     }
     
     @objc private func handleThumbnailUpdate(_ notification: Notification) {
@@ -193,13 +209,15 @@ final class MyRoomsViewController: UIViewController {
     }
 
     private func makeChipsSection() -> NSCollectionLayoutSection {
+        let chipWidth: CGFloat = 124
+        let chipHeight: CGFloat = 30
         let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
-            widthDimension: .estimated(100),
-            heightDimension: .absolute(32)
+            widthDimension: .absolute(chipWidth),
+            heightDimension: .absolute(chipHeight)
         ))
 
         let group = NSCollectionLayoutGroup.horizontal(
-            layoutSize: NSCollectionLayoutSize(widthDimension: .estimated(100), heightDimension: .absolute(32)),
+            layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(chipWidth), heightDimension: .absolute(chipHeight)),
             subitems: [item]
         )
 
@@ -220,7 +238,7 @@ final class MyRoomsViewController: UIViewController {
         let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 1
         let group = NSCollectionLayoutGroup.horizontal(
             layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1.0), heightDimension: .absolute(200)),
-            subitem: item,
+            repeatingSubitem: item,
             count: columns
         )
 
@@ -502,8 +520,12 @@ final class MyRoomsViewController: UIViewController {
             let destDir = self.roomsFolderURL
 
             for url in urls {
-                url.startAccessingSecurityScopedResource()
-                defer { url.stopAccessingSecurityScopedResource() }
+                let didStart = url.startAccessingSecurityScopedResource()
+                defer {
+                    if didStart {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
 
                 let dest = destDir.appendingPathComponent(url.lastPathComponent)
 
@@ -548,6 +570,12 @@ final class MyRoomsViewController: UIViewController {
             completion(cached)
             return
         }
+
+        if inFlightThumbnailRequests[url] != nil {
+            inFlightThumbnailRequests[url]?.append(completion)
+            return
+        }
+        inFlightThumbnailRequests[url] = [completion]
         
         // Check for saved colored thumbnail on background queue
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -557,32 +585,44 @@ final class MyRoomsViewController: UIViewController {
                 // Cache and return on main thread
                 DispatchQueue.main.async {
                     self.thumbnailCache.setObject(savedThumbnail, forKey: url as NSURL)
-                    completion(savedThumbnail)
+                    self.finishThumbnailRequest(for: url, image: savedThumbnail)
                 }
                 return
             }
             
             // Fall back to QuickLook generator
-            DispatchQueue.main.async {
-                let req = QLThumbnailGenerator.Request(
-                    fileAt: url,
-                    size: CGSize(width: 400, height: 400),
-                    scale: UIScreen.main.scale,
-                    representationTypes: .all
-                )
+            let req = QLThumbnailGenerator.Request(
+                fileAt: url,
+                size: CGSize(width: 400, height: 400),
+                scale: self.traitCollection.displayScale,
+                representationTypes: .all
+            )
 
-                QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
-                    DispatchQueue.main.async {
-                        if let img = rep?.uiImage {
-                            self?.thumbnailCache.setObject(img, forKey: url as NSURL)
-                            completion(img)
-                        } else {
-                            completion(nil)
-                        }
+            QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
+                guard let self = self else { return }
+                let image = rep?.uiImage
+
+                if let image {
+                    // Persist generated thumbnails so cold launches don't regenerate them repeatedly.
+                    DispatchQueue.global(qos: .utility).async {
+                        self.saveGeneratedThumbnail(image, for: url)
                     }
+                }
+
+                DispatchQueue.main.async {
+                    if let image {
+                        self.thumbnailCache.setObject(image, forKey: url as NSURL)
+                    }
+                    self.finishThumbnailRequest(for: url, image: image)
                 }
             }
         }
+    }
+
+    private func finishThumbnailRequest(for url: URL, image: UIImage?) {
+        let callbacks = inFlightThumbnailRequests[url] ?? []
+        inFlightThumbnailRequests[url] = nil
+        callbacks.forEach { $0(image) }
     }
     
     private func loadSavedThumbnail(for roomURL: URL) -> UIImage? {
@@ -605,6 +645,18 @@ final class MyRoomsViewController: UIViewController {
         }
         
         return image
+    }
+
+    private func saveGeneratedThumbnail(_ image: UIImage, for roomURL: URL) {
+        let roomName = roomURL.deletingPathExtension().lastPathComponent
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let directory = documentsURL.appendingPathComponent("RoomThumbnails")
+        let thumbnailURL = directory.appendingPathComponent("\(roomName)_thumb.jpg")
+
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if let data = image.jpegData(compressionQuality: 0.82) {
+            try? data.write(to: thumbnailURL, options: .atomic)
+        }
     }
 
     func fileSizeString(for url: URL) -> String {
@@ -778,7 +830,7 @@ final class MyRoomsViewController: UIViewController {
         }
 
         if roomFiles.count == 1 {
-            if let tip = firstUnseen(from: [AppTips.roomImport, AppTips.roomActions]) {
+            if let tip = firstUnseen(from: [AppTips.roomImport, AppTips.roomActions, AppTips.roomLongPress]) {
                 showTip(tip) { [weak self] in
                     if tip.id == AppTips.roomImport.id {
                         self?.importTapped()
@@ -789,10 +841,11 @@ final class MyRoomsViewController: UIViewController {
         }
 
         if let tip = firstUnseen(from: [
+            AppTips.roomLongPress,
             AppTips.roomCategories,
             AppTips.roomSearch,
             AppTips.roomDetail,
-            AppTips.roomARPreview
+            AppTips.roomARPreview,
         ]) {
             showTip(tip) {}
         }
@@ -823,11 +876,19 @@ final class MyRoomsViewController: UIViewController {
             onPrimaryAction: action,
             onDismiss: { [weak self] in
                 self?.updateCollectionInsetsForTip(height: 0)
+                self?.reestablishZeroHeightConstraint()
             },
             onPresented: { [weak self] height in
                 self?.updateCollectionInsetsForTip(height: height + 10)
             }
         )
+    }
+
+    private func reestablishZeroHeightConstraint() {
+        guard tipContainerBottomConstraint == nil else { return }
+        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
+        tipContainerBottomConstraint?.priority = .required
+        tipContainerBottomConstraint?.isActive = true
     }
 
     private func updateCollectionInsetsForTip(height: CGFloat) {
@@ -894,8 +955,10 @@ final class ChipCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.layer.cornerRadius = 16
-        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        button.configuration = .plain()
+        button.titleLabel?.numberOfLines = 1
+        button.titleLabel?.lineBreakMode = .byTruncatingTail
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
         contentView.addSubview(button)
         NSLayoutConstraint.activate([
             button.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -917,20 +980,25 @@ final class ChipCell: UICollectionViewCell {
             color = .systemIndigo
         }
 
-        button.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
-        button.tintColor = isSelected ? .white : color
-        let resolvedTint: UIColor = button.tintColor ?? color
-
-        let attachment = NSTextAttachment()
-        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-        attachment.image = UIImage(systemName: icon, withConfiguration: config)?.withTintColor(resolvedTint, renderingMode: .alwaysOriginal)
-
-        let attributedString = NSMutableAttributedString(attachment: attachment)
-        attributedString.append(NSAttributedString(string: "  \(title)", attributes: [
-            .font: UIFont.systemFont(ofSize: 14, weight: .medium),
-            .foregroundColor: resolvedTint
-        ]))
-
-        button.setAttributedTitle(attributedString, for: .normal)
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = title
+        configuration.buttonSize = .mini
+        configuration.image = UIImage(
+            systemName: icon,
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        )
+        configuration.imagePlacement = .leading
+        configuration.imagePadding = 4
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+        configuration.titleLineBreakMode = .byTruncatingTail
+        configuration.baseForegroundColor = isSelected ? .white : color
+        configuration.background.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
+        configuration.background.cornerRadius = 15
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var out = incoming
+            out.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+            return out
+        }
+        button.configuration = configuration
     }
 }

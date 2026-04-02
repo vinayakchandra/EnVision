@@ -80,7 +80,7 @@ final class FurniturePicker: UIViewController {
 
             let group = NSCollectionLayoutGroup.horizontal(
                 layoutSize: groupSize,
-                subitem: item,
+                repeatingSubitem: item,
                 count: columns
             )
             return NSCollectionLayoutSection(group: group)
@@ -197,7 +197,7 @@ final class FurniturePicker: UIViewController {
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: CGSize(width: 300, height: 300),
-            scale: UIScreen.main.scale,
+            scale: traitCollection.displayScale,
             representationTypes: .all
         )
 

@@ -739,10 +739,7 @@ final class RoomVisualizeVC: UIViewController {
     @objc private func handleMeasurementTap(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: arView)
         
-        // Raycast to find 3D point
-        guard let result = arView.entity(at: location) else { return }
-        
-        let worldPosition = result.position(relativeTo: nil)
+        guard let worldPosition = resolveMeasurementWorldPosition(from: location) else { return }
         measurementPoints.append(worldPosition)
         
         // Add visual marker at tap point
@@ -756,6 +753,21 @@ final class RoomVisualizeVC: UIViewController {
             measurementPoints.append(worldPosition)
             addMeasurementMarker(at: worldPosition)
         }
+    }
+
+    private func resolveMeasurementWorldPosition(from screenPoint: CGPoint) -> SIMD3<Float>? {
+        // Preferred: collision raycast hit point on scene geometry.
+        if let ray = arView.ray(through: screenPoint),
+           let hit = arView.scene.raycast(origin: ray.origin, direction: ray.direction).first {
+            return hit.position
+        }
+
+        // Fallback: entity origin if no collision hit is available.
+        if let entity = arView.entity(at: screenPoint) {
+            return entity.position(relativeTo: nil)
+        }
+
+        return nil
     }
     
     private func addMeasurementMarker(at position: SIMD3<Float>) {
@@ -777,10 +789,10 @@ final class RoomVisualizeVC: UIViewController {
         let point2 = measurementPoints[1]
         
         // Calculate distance
-        let distance = simd_distance(point1, point2)
+        let displayedDistance = simd_distance(point1, point2)
         
-        // Convert to real-world units (assuming model scale)
-        let realDistance = distance / 0.005 // Adjust based on your model scale
+        // Convert using room scale manager for real-world meters.
+        let realDistance = scaleManager.toRealWorldMeters(displayedDistance)
         
         // Create line between points
         drawMeasurementLine(from: point1, to: point2)

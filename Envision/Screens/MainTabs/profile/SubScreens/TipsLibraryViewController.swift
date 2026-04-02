@@ -47,24 +47,37 @@ final class TipsLibraryViewController: UIViewController {
         sections = [
             TipSection(title: "Getting Started", items: [
                 TipItem(title: "Welcome to EnVision", message: "Take a tour to learn how to scan rooms and furniture.", icon: "hand.wave.fill", color: .systemBlue),
-                TipItem(title: "Customize Your Profile", message: "Set your preferences and personalize your experience.", icon: "person.crop.circle", color: .systemOrange)
+                TipItem(title: "Customize Your Profile", message: "Set your preferences and personalize your experience.", icon: "person.crop.circle", color: .systemOrange),
             ]),
-            
+
             TipSection(title: "Room Scanning", items: [
-                TipItem(title: "Scan Your First Room", message: "Use the green camera button to start scanning with LiDAR.", icon: "camera.viewfinder", color: .systemGreen),
+                TipItem(title: "Scan Your First Room", message: "Use the camera button to start scanning with LiDAR.", icon: "camera.viewfinder", color: .systemGreen),
                 TipItem(title: "Scan Slowly", message: "Move your device slowly for the best accuracy.", icon: "tortoise.fill", color: .systemTeal),
-                TipItem(title: "Import Models", message: "Bring in existing USDZ models from Files.", icon: "square.and.arrow.down", color: .systemIndigo)
+                TipItem(title: "Import Models", message: "Bring in existing USDZ models from Files.", icon: "square.and.arrow.down", color: .systemIndigo),
+                TipItem(title: "Long-Press for Quick Actions", message: "Hold any room thumbnail to rename, share, view in AR, change its category, or delete — without opening it.", icon: "hand.tap.fill", color: .systemCyan),
+                TipItem(title: "AR Preview", message: "Preview scanned rooms with furniture in augmented reality.", icon: "arkit", color: .systemBlue),
             ]),
-            
+
             TipSection(title: "Furniture Capture", items: [
                 TipItem(title: "Capture Furniture", message: "Scan objects using 360° photogrammetry.", icon: "camera.metering.center.weighted", color: .systemPurple),
+                TipItem(title: "Automatic Capture", message: "Walk around the object while the app guides capture quality.", icon: "arrow.triangle.2.circlepath.camera", color: .systemIndigo),
+                TipItem(title: "Capture Enough Photos", message: "Aim for 30–50 photos for high-quality reconstruction.", icon: "photo.stack.fill", color: .systemOrange),
+                TipItem(title: "Best Results", message: "Walk slowly with stable lighting for cleaner meshes.", icon: "sparkles", color: .systemMint),
                 TipItem(title: "Good Lighting", message: "Ensure even lighting and avoid harsh shadows.", icon: "sun.max.fill", color: .systemYellow),
-                TipItem(title: "360° Coverage", message: "Walk around the entire object to capture all angles.", icon: "arrow.triangle.2.circlepath.camera", color: .systemRed)
+                TipItem(title: "360° Coverage", message: "Cover all sides and heights of the object before finishing.", icon: "rotate.3d", color: .systemRed),
+                TipItem(title: "Create from Photos", message: "Build models from an existing photo set when needed.", icon: "photo.on.rectangle.angled", color: .systemTeal),
+                TipItem(title: "Import USDZ Models", message: "Bring furniture models from Files into your library.", icon: "square.and.arrow.down.fill", color: .systemGreen),
             ]),
-            
+
+            TipSection(title: "Editing & Customization", items: [
+                TipItem(title: "Change Surface Colors", message: "Use the Color button in Edit mode to repaint walls, floors, doors, and more.", icon: "paintpalette.fill", color: .systemPink),
+                TipItem(title: "Apply Textures", message: "Use the Texture button to apply wood floors or wallpaper to any surface.", icon: "photo.on.rectangle", color: .systemBrown),
+                TipItem(title: "Measure in AR", message: "Use the ruler toolbar while viewing furniture in AR to measure dimensions or point-to-point distances.", icon: "ruler.fill", color: .systemBlue),
+            ]),
+
             TipSection(title: "Organization", items: [
                 TipItem(title: "Categories", message: "Organize your rooms and furniture with smart categories.", icon: "tag.fill", color: .systemPink),
-                TipItem(title: "Actions Menu", message: "Select, delete, or share multiple items at once.", icon: "ellipsis.circle", color: .systemGray)
+                TipItem(title: "Actions Menu", message: "Select, delete, or share multiple items at once.", icon: "ellipsis.circle", color: .systemGray),
             ])
         ]
     }

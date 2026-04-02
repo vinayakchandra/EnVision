@@ -112,7 +112,15 @@ enum AppTips {
         dismissActionTitle: "Later"
     )
 
-    // MARK: - My Furniture (8)
+    static let roomLongPress = TipDefinition(
+        id: "room_long_press",
+        title: "Long-Press for Quick Actions",
+        message: "Hold any room thumbnail to rename, share, view in AR, change its category, or delete — all without opening it.",
+        primaryActionTitle: "Got It",
+        dismissActionTitle: "Later"
+    )
+
+    // MARK: - My Furniture (9)
     static let furnitureIntro = TipDefinition(
         id: "furniture_intro",
         title: "Capture Furniture",
@@ -245,28 +253,47 @@ enum AppTips {
     static let allTipIDs: [String] = [
         welcome.id,
         profileIntro.id,
+        // Rooms
         roomsIntro.id,
         roomScanSlowly.id,
         roomImport.id,
         roomActions.id,
+        roomLongPress.id,
         roomCategories.id,
         roomSearch.id,
         roomDetail.id,
         roomARPreview.id,
+        // Furniture
         furnitureIntro.id,
         furnitureAutomaticCapture.id,
         furniturePhotoCount.id,
+        furnitureQuality.id,
         furnitureLighting.id,
         furnitureCoverage.id,
         furnitureFromPhotos.id,
         furnitureImportUSDZ.id,
         furnitureCategories.id,
+        // Profile
         profileSettings.id,
         profileTheme.id,
         profileNotifications.id,
         profileTipsLibrary.id,
         profileRestartTour.id,
         profileExportData.id,
-        profileSupport.id
+        profileSupport.id,
+    ]
+
+    /// Tips that define completion of the core onboarding journey.
+    /// Data-shape-dependent tips (e.g. empty library states) are intentionally excluded.
+    static let completionTipIDs: [String] = [
+        welcome.id,
+        profileIntro.id,
+        profileSettings.id,
+        profileTheme.id,
+        profileNotifications.id,
+        profileTipsLibrary.id,
+        profileRestartTour.id,
+        profileExportData.id,
+        profileSupport.id,
     ]
 }

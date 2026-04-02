@@ -166,7 +166,8 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
         
         // Add native Done button (right side)
         let doneButton = UIBarButtonItem(
-            barButtonSystemItem: .done,
+            title: "Done",
+            style: .prominent,
             target: self,
             action: #selector(dismissColorPicker)
         )

@@ -458,9 +458,6 @@ final class MeasurementManager: ObservableObject {
     
     /// Update all labels to reflect current unit
     func refreshLabelsForUnitChange(in scene: RealityKit.Scene) {
-        // Store entities that need updating
-        let entitiesToUpdate = boundingBoxEntities
-        
         // Clear existing visualizations
         clearAllMeasurements()
         

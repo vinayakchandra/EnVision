@@ -63,6 +63,8 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
             // Load thumbnail asynchronously and only update the image
             generateThumbnail(for: url) { [weak self] image in
                 guard let self = self,
+                      indexPath.item < self.displayFiles.count,
+                      self.displayFiles[indexPath.item] == url,
                       let currentCell = self.collectionView.cellForItem(at: indexPath) as? RoomCell
                 else { return }
 
@@ -345,11 +347,23 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
                 return
             }
             let url = self.displayFiles[indexPath.item]
-            try? FileManager.default.removeItem(at: url)
-            self.roomFiles.removeAll { $0 == url }
-            self.thumbnailCache.removeObject(forKey: url as NSURL)
-            collectionView.deleteItems(at: [indexPath])
-            completion(true)
+            let filename = url.lastPathComponent
+
+            SaveManager.shared.deleteModel(at: url) { [weak self] success in
+                guard let self = self, success else {
+                    completion(false)
+                    return
+                }
+
+                MetadataManager.shared.deleteMetadata(for: filename)
+                RoomColorManager.deleteThumbnail(for: url)
+                RoomColorManager.shared.clearColors(for: url)
+
+                self.roomFiles.removeAll { $0 == url }
+                self.thumbnailCache.removeObject(forKey: url as NSURL)
+                collectionView.deleteItems(at: [indexPath])
+                completion(true)
+            }
         }
 
         return UISwipeActionsConfiguration(actions: [delete])

@@ -198,7 +198,7 @@ final class SaveManager {
         let req = QLThumbnailGenerator.Request(
             fileAt: url,
             size: CGSize(width: 400, height: 400),
-            scale: UIScreen.main.scale,
+            scale: UITraitCollection.current.displayScale,
             representationTypes: .all
         )
         

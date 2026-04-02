@@ -10,6 +10,9 @@ enum AuthManagerError: LocalizedError {
     case invalidGoogleURLScheme(expected: String)
     case invalidEmailOrPassword
     case emailUsesDifferentProvider
+    case signupEmailAlreadyInUse
+    case signupWeakPassword
+    case signupInvalidEmail
     case resetEmailNotFound
     case resetInvalidEmail
 
@@ -27,6 +30,12 @@ enum AuthManagerError: LocalizedError {
             return "Invalid email or password."
         case .emailUsesDifferentProvider:
             return "This email is linked to a different sign-in method (likely Google). Use Google Sign-In or reset password."
+        case .signupEmailAlreadyInUse:
+            return "An account already exists with this email. Sign in instead or reset your password."
+        case .signupWeakPassword:
+            return "Password is too weak. Use at least 8 characters with uppercase letters and numbers."
+        case .signupInvalidEmail:
+            return "Please enter a valid email address."
         case .resetEmailNotFound:
             return "No account found with this email."
         case .resetInvalidEmail:
@@ -63,7 +72,7 @@ final class AuthManager {
     func signUp(name: String, email: String, password: String, completion: @escaping (Result<UserModel, Error>) -> Void) {
         Auth.auth().createUser(withEmail: email, password: password) { result, error in
             if let error {
-                completion(.failure(error))
+                completion(.failure(self.mapSignupError(error)))
                 return
             }
 
@@ -237,6 +246,27 @@ final class AuthManager {
             return AuthManagerError.resetInvalidEmail
         case .userNotFound:
             return AuthManagerError.resetEmailNotFound
+        default:
+            return error
+        }
+    }
+
+    private func mapSignupError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == AuthErrorDomain,
+              let code = AuthErrorCode(rawValue: nsError.code) else {
+            return error
+        }
+
+        switch code {
+        case .emailAlreadyInUse:
+            return AuthManagerError.signupEmailAlreadyInUse
+        case .weakPassword:
+            return AuthManagerError.signupWeakPassword
+        case .invalidEmail:
+            return AuthManagerError.signupInvalidEmail
+        case .credentialAlreadyInUse, .accountExistsWithDifferentCredential:
+            return AuthManagerError.emailUsesDifferentProvider
         default:
             return error
         }

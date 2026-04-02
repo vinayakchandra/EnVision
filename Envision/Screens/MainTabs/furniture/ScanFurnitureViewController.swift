@@ -123,6 +123,20 @@ final class ScanFurnitureViewController: UIViewController {
         setupTipContainer()
 
         loadFurnitureFiles(from: furnitureFolderURL())
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTourDidStart),
+            name: .tourDidStart,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: .tourDidStart, object: nil)
+    }
+
+    @objc private func handleTourDidStart() {
+        showContextualTips()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -142,6 +156,7 @@ final class ScanFurnitureViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         TipCoordinator.shared.dismissTip(from: tipContainerView)
+        updateCollectionInsetsForTip(height: 0)
     }
 
     private func setupRefreshControl() {
@@ -231,7 +246,7 @@ final class ScanFurnitureViewController: UIViewController {
         TipCoordinator.shared.dismissTip(from: tipContainerView)
         collectionView.allowsMultipleSelection = true
 
-        let doneBtn = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(disableMultipleSelection))
+        let doneBtn = UIBarButtonItem(title: "Done", style: .prominent, target: self, action: #selector(disableMultipleSelection))
         let deleteBtn = UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelectedModels))
         deleteBtn.tintColor = .systemRed
 
@@ -385,15 +400,17 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     private func makeChipsSection() -> NSCollectionLayoutSection {
+        let chipWidth: CGFloat = 124
+        let chipHeight: CGFloat = 30
         let itemSize = NSCollectionLayoutSize(
-            widthDimension: .estimated(100),
-            heightDimension: .absolute(32)
+            widthDimension: .absolute(chipWidth),
+            heightDimension: .absolute(chipHeight)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
 
         let groupSize = NSCollectionLayoutSize(
-            widthDimension: .estimated(100),
-            heightDimension: .absolute(32)
+            widthDimension: .absolute(chipWidth),
+            heightDimension: .absolute(chipHeight)
         )
         let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitems: [item])
 
@@ -419,7 +436,11 @@ final class ScanFurnitureViewController: UIViewController {
             heightDimension: .absolute(groupHeight)
         )
 
-        let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitem: item, count: columns)
+        let group = NSCollectionLayoutGroup.horizontal(
+            layoutSize: groupSize,
+            repeatingSubitem: item,
+            count: columns
+        )
         let section = NSCollectionLayoutSection(group: group)
         section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
         return section
@@ -441,7 +462,11 @@ final class ScanFurnitureViewController: UIViewController {
                 heightDimension: .absolute(groupHeight)
             )
 
-            let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitem: item, count: columns)
+            let group = NSCollectionLayoutGroup.horizontal(
+                layoutSize: groupSize,
+                repeatingSubitem: item,
+                count: columns
+            )
             let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
             return section
@@ -620,7 +645,7 @@ final class ScanFurnitureViewController: UIViewController {
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: CGSize(width: 400, height: 400),
-            scale: UIScreen.main.scale,
+            scale: traitCollection.displayScale,
             representationTypes: .all
         )
 
@@ -810,8 +835,30 @@ final class ScanFurnitureViewController: UIViewController {
             configuration: config,
             in: self,
             containerView: tipContainerView,
-            onPrimaryAction: action
+            onPrimaryAction: action,
+            onDismiss: { [weak self] in
+                self?.updateCollectionInsetsForTip(height: 0)
+                self?.reestablishZeroHeightConstraint()
+            },
+            onPresented: { [weak self] height in
+                self?.updateCollectionInsetsForTip(height: height + 10)
+            }
         )
+    }
+
+    private func reestablishZeroHeightConstraint() {
+        guard tipContainerBottomConstraint == nil else { return }
+        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
+        tipContainerBottomConstraint?.priority = .required
+        tipContainerBottomConstraint?.isActive = true
+    }
+
+    private func updateCollectionInsetsForTip(height: CGFloat) {
+        var inset = collectionView.contentInset
+        guard abs(inset.top - height) > 0.5 else { return }
+        inset.top = max(0, height)
+        collectionView.contentInset = inset
+        collectionView.scrollIndicatorInsets = inset
     }
 }
 
@@ -1162,8 +1209,10 @@ final class FurnitureChipCell: UICollectionViewCell {
         super.init(frame: frame)
 
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.layer.cornerRadius = 16
-        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        button.configuration = .plain()
+        button.titleLabel?.numberOfLines = 1
+        button.titleLabel?.lineBreakMode = .byTruncatingTail
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
         contentView.addSubview(button)
         NSLayoutConstraint.activate([
                                         button.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -1178,19 +1227,25 @@ final class FurnitureChipCell: UICollectionViewCell {
     }
 
     func configure(title: String, icon: String, color: UIColor, isSelected: Bool) {
-        button.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
-        button.tintColor = isSelected ? .white : color
-
-        let attachment = NSTextAttachment()
-        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-        attachment.image = UIImage(systemName: icon, withConfiguration: config)?.withTintColor(button.tintColor, renderingMode: .alwaysOriginal)
-
-        let attributedString = NSMutableAttributedString(attachment: attachment)
-        attributedString.append(NSAttributedString(string: "  \(title)", attributes: [
-            .font: UIFont.systemFont(ofSize: 14, weight: .medium),
-            .foregroundColor: button.tintColor as Any
-        ]))
-
-        button.setAttributedTitle(attributedString, for: .normal)
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = title
+        configuration.buttonSize = .mini
+        configuration.image = UIImage(
+            systemName: icon,
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        )
+        configuration.imagePlacement = .leading
+        configuration.imagePadding = 4
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+        configuration.titleLineBreakMode = .byTruncatingTail
+        configuration.baseForegroundColor = isSelected ? .white : color
+        configuration.background.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
+        configuration.background.cornerRadius = 15
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var out = incoming
+            out.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+            return out
+        }
+        button.configuration = configuration
     }
 }

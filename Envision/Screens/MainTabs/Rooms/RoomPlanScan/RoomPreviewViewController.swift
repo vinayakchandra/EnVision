@@ -355,7 +355,7 @@ final class RoomPreviewViewController: UIViewController {
         let req = QLThumbnailGenerator.Request(
             fileAt: url,
             size: CGSize(width: 600, height: 600),
-            scale: UIScreen.main.scale,
+            scale: traitCollection.displayScale,
             representationTypes: .all
         )
 
@@ -430,10 +430,12 @@ final class RoomPreviewViewController: UIViewController {
                     metadata: metadata
                 )
                 
-                // 🆕 Save thumbnail from preview image
+                // Save thumbnail from preview image — off main thread (resize + compress + write)
                 if let thumbnail = self.imageView.image {
-                    RoomColorManager.saveThumbnail(thumbnail, for: savedURL)
-                    print("✅ Saved thumbnail for newly scanned room")
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        RoomColorManager.saveThumbnail(thumbnail, for: savedURL)
+                        print("✅ Saved thumbnail for newly scanned room")
+                    }
                 } else {
                     print("⚠️ No preview image available for thumbnail")
                 }

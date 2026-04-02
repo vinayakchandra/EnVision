@@ -10,8 +10,6 @@ class MetadataManager {
 
     private let metadataFileName = "rooms_metadata.json"
     private var cache: RoomsMetadata?
-    private let queue = DispatchQueue(label: "com.app.metadata", qos: .userInitiated)
-
     private init() {
         // Don't load on init - let it load lazily when needed
     }
@@ -65,25 +63,18 @@ class MetadataManager {
     }
 
     func saveMetadata(_ metadata: RoomsMetadata) {
-        queue.async { [weak self] in
-            guard let self = self else { return }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
 
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = .prettyPrinted
+        do {
+            let data = try encoder.encode(metadata)
+            try data.write(to: self.metadataFileURL(), options: .atomic)
 
-            do {
-                let data = try encoder.encode(metadata)
-                try data.write(to: self.metadataFileURL(), options: .atomic)
-
-                print(" Saved metadata with \(metadata.rooms.count) rooms")
-
-                DispatchQueue.main.async {
-                    self.cache = metadata
-                }
-            } catch {
-                print(" Error saving metadata: \(error)")
-            }
+            print(" Saved metadata with \(metadata.rooms.count) rooms")
+            self.cache = metadata
+        } catch {
+            print(" Error saving metadata: \(error)")
         }
     }
 

@@ -224,20 +224,20 @@ final class BackgroundModelProcessor: @unchecked Sendable {
                             
                         case .requestProgress(_, let fraction):
                             let mappedProgress = 0.1 + (Float(fraction) * 0.85)
-                            
-                            var status = "Processing..."
+
+                            let statusText: String
                             if fraction < 0.3 {
-                                status = " Analyzing images..."
+                                statusText = " Analyzing images..."
                             } else if fraction < 0.6 {
-                                status = " Building 3D mesh..."
+                                statusText = " Building 3D mesh..."
                             } else if fraction < 0.9 {
-                                status = " Applying textures..."
+                                statusText = " Applying textures..."
                             } else {
-                                status = " Finalizing model..."
+                                statusText = " Finalizing model..."
                             }
                             
                             await MainActor.run {
-                                self.updateProgress(mappedProgress, status: status)
+                                self.updateProgress(mappedProgress, status: statusText)
                             }
                             
                         case .requestComplete(_, _):
@@ -362,31 +362,44 @@ final class BackgroundModelProcessor: @unchecked Sendable {
     }
     
     // MARK: - Local Notifications
+    func postModelGenerationNotification(success: Bool, errorMessage: String? = nil) {
+        sendCompletionNotification(success: success, errorMessage: errorMessage)
+    }
+
     private func sendCompletionNotification(success: Bool, errorMessage: String? = nil) {
         DispatchQueue.main.async {
+            let notificationsEnabled = UserManager.shared.currentUser?.preferences.notificationsEnabled ?? true
+            guard notificationsEnabled else { return }
             guard UIApplication.shared.applicationState != .active else { return }
-            
-            let content = UNMutableNotificationContent()
-            
-            if success {
-                content.title = "3D Model Ready!"
-                content.body = "Your furniture model has been generated and saved."
-                content.sound = .default
-            } else {
-                content.title = "Model Generation Failed"
-                content.body = errorMessage ?? "An error occurred during processing."
-                content.sound = .default
-            }
-            
-            let request = UNNotificationRequest(
-                identifier: UUID().uuidString,
-                content: content,
-                trigger: nil
-            )
-            
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
-                    print(" Notification error: \(error)")
+
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                let isAuthorized = settings.authorizationStatus == .authorized
+                    || settings.authorizationStatus == .provisional
+                    || settings.authorizationStatus == .ephemeral
+                guard isAuthorized else { return }
+
+                let content = UNMutableNotificationContent()
+
+                if success {
+                    content.title = "3D Model Ready!"
+                    content.body = "Your furniture model has been generated and saved."
+                    content.sound = .default
+                } else {
+                    content.title = "Model Generation Failed"
+                    content.body = errorMessage ?? "An error occurred during processing."
+                    content.sound = .default
+                }
+
+                let request = UNNotificationRequest(
+                    identifier: UUID().uuidString,
+                    content: content,
+                    trigger: nil
+                )
+
+                UNUserNotificationCenter.current().add(request) { error in
+                    if let error = error {
+                        print(" Notification error: \(error)")
+                    }
                 }
             }
         }

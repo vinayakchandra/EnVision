@@ -630,7 +630,7 @@ final class RoomEditVC: UIViewController {
         // Save button to save colors and go back
         let saveButton = UIBarButtonItem(
             title: "Save",
-            style: .done,
+            style: .prominent,
             target: self,
             action: #selector(saveAndGoBack)
         )
@@ -665,10 +665,13 @@ final class RoomEditVC: UIViewController {
 
     // MARK: - Loading
     private func loadRoom() {
-        Task {
-            let entity = try await Entity.load(contentsOf: roomURL)
-            await MainActor.run {
-                prepareModel(entity)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let entity = try await Entity(contentsOf: self.roomURL)
+                self.prepareModel(entity)
+            } catch {
+                print("❌ Failed to load room model: \(error.localizedDescription)")
             }
         }
     }
@@ -1067,7 +1070,8 @@ final class RoomEditVC: UIViewController {
         
         // Add native Done button (right side)
         let doneButton = UIBarButtonItem(
-            barButtonSystemItem: .done,
+            title: "Done",
+            style: .prominent,
             target: self,
             action: #selector(dismissColorPicker)
         )
@@ -1199,7 +1203,8 @@ final class RoomEditVC: UIViewController {
         
         // Add native Done button (right side)
         let doneButton = UIBarButtonItem(
-            barButtonSystemItem: .done,
+            title: "Done",
+            style: .prominent,
             target: self,
             action: #selector(dismissColorPicker)
         )
