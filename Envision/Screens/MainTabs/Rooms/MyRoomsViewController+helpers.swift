@@ -294,6 +294,9 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
             // Update metadata with new filename
             MetadataManager.shared.renameMetadata(from: oldFilename, to: newFilename)
 
+            // Move associated color JSON and thumbnail so they stay in sync with the new name
+            RoomColorManager.shared.renameRoom(from: url, to: newURL)
+
             loadRoomFiles()
             showToast(message: "Renamed to \(newName)")
         } catch {
@@ -317,8 +320,9 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
 
             SaveManager.shared.deleteModel(at: url) { [weak self] success in
                 if success {
-                    // Delete metadata
                     MetadataManager.shared.deleteMetadata(for: filename)
+                    RoomColorManager.deleteThumbnail(for: url)
+                    RoomColorManager.shared.clearColors(for: url)
 
                     self?.loadRoomFiles()
                     self?.showToast(message: "Room deleted")

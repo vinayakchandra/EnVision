@@ -379,8 +379,9 @@ final class MyRoomsViewController: UIViewController {
                     // Delete metadata
                     MetadataManager.shared.deleteMetadata(for: filename)
                     
-                    // 🆕 Delete thumbnail to prevent orphaned files
+                    // Delete thumbnail and saved colors to prevent orphaned files
                     RoomColorManager.deleteThumbnail(for: url)
+                    RoomColorManager.shared.clearColors(for: url)
                     
                     count += 1
                 }

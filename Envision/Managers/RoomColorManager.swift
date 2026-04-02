@@ -18,6 +18,10 @@ final class RoomColorManager {
     static let tableKey = "table"
     static let chairKey = "chair"
     static let storageKey = "storage"
+
+    // Key suffix for texture names
+    static let floorTextureKey = "floor_texture"
+    static let wallTextureKey  = "wall_texture"
     
     // MARK: - Public API
     
@@ -70,6 +74,58 @@ final class RoomColorManager {
         return result
     }
     
+    /// Save a texture name for a specific element type (e.g. "floor_texture" -> "texture-wooden-board")
+    func saveTextureName(_ name: String?, for key: String, roomURL: URL) {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            colorStorage[roomKey] = [:]
+        }
+        if let name {
+            colorStorage[roomKey]?[key] = name
+        } else {
+            colorStorage[roomKey]?.removeValue(forKey: key)
+        }
+        persistColors(for: roomURL)
+    }
+
+    /// Get saved texture name for an element type, or nil if not set
+    func getTextureName(for key: String, roomURL: URL) -> String? {
+        let roomKey = roomURL.path
+        if let name = colorStorage[roomKey]?[key] {
+            return name
+        }
+        loadColors(for: roomURL)
+        return colorStorage[roomKey]?[key]
+    }
+
+    /// Migrate all persisted data (color JSON, thumbnail, memory cache) from the old room URL to the new one.
+    /// Call this immediately after the USDZ file is renamed on disk.
+    func renameRoom(from oldURL: URL, to newURL: URL) {
+        let fm = FileManager.default
+
+        // Move color JSON
+        let oldColorFile = colorFileURL(for: oldURL)
+        let newColorFile = colorFileURL(for: newURL)
+        if fm.fileExists(atPath: oldColorFile.path) {
+            try? fm.moveItem(at: oldColorFile, to: newColorFile)
+        }
+
+        // Move thumbnail
+        let oldThumb = RoomColorManager.thumbnailURL(for: oldURL)
+        let newThumb = RoomColorManager.thumbnailURL(for: newURL)
+        if fm.fileExists(atPath: oldThumb.path) {
+            try? fm.moveItem(at: oldThumb, to: newThumb)
+        }
+
+        // Migrate in-memory color cache from old key to new key
+        let oldKey = oldURL.path
+        let newKey = newURL.path
+        if let cached = colorStorage[oldKey] {
+            colorStorage[newKey] = cached
+            colorStorage.removeValue(forKey: oldKey)
+        }
+    }
+
     /// Clear all saved colors for a room
     func clearColors(for roomURL: URL) {
         let roomKey = roomURL.path
@@ -130,44 +186,49 @@ final class RoomColorManager {
         return directory.appendingPathComponent("\(roomName)_thumb.jpg")
     }
     
-    /// Save a thumbnail image for a room
+    /// Save a thumbnail image for a room.
+    /// The pixel size is chosen based on the main screen scale so the image is
+    /// never upscaled when displayed in collection view cells (avoids soft/blurry thumbnails).
     static func saveThumbnail(_ image: UIImage, for roomURL: URL) {
         let thumbnailURL = thumbnailURL(for: roomURL)
-        
-        // Resize to standard thumbnail size (consistent across app)
-        let targetSize = CGSize(width: 400, height: 400)
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
+
+        // Scale-aware target: 400pt × screenScale, capped at 800px to stay reasonable.
+        let screenScale = UIScreen.main.scale
+        let basePts: CGFloat = 400
+        let pixelSize = min(basePts * screenScale, 800)
+        let targetSize = CGSize(width: pixelSize, height: pixelSize)
+
+        // Use a 1× renderer — we're already working in pixels, not points.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+
         let resizedImage = renderer.image { context in
-            // Fill with background color first (in case image doesn't fill)
             UIColor.systemGray6.setFill()
             context.fill(CGRect(origin: .zero, size: targetSize))
-            
-            // Calculate aspect-fit rect
+
             let imageSize = image.size
-            let widthRatio = targetSize.width / imageSize.width
-            let heightRatio = targetSize.height / imageSize.height
-            let scale = min(widthRatio, heightRatio)
-            let scaledWidth = imageSize.width * scale
-            let scaledHeight = imageSize.height * scale
-            let x = (targetSize.width - scaledWidth) / 2
-            let y = (targetSize.height - scaledHeight) / 2
-            
-            image.draw(in: CGRect(x: x, y: y, width: scaledWidth, height: scaledHeight))
+            let ratio = min(targetSize.width / imageSize.width,
+                            targetSize.height / imageSize.height)
+            let drawWidth  = imageSize.width  * ratio
+            let drawHeight = imageSize.height * ratio
+            let drawRect = CGRect(
+                x: (targetSize.width  - drawWidth)  / 2,
+                y: (targetSize.height - drawHeight) / 2,
+                width: drawWidth,
+                height: drawHeight
+            )
+            image.draw(in: drawRect)
         }
-        
-        // Save as JPEG with quality compression
-        if let data = resizedImage.jpegData(compressionQuality: 0.85) {
+
+        // Slightly higher quality on 3× screens to preserve sharpness.
+        let quality: CGFloat = screenScale >= 3 ? 0.90 : 0.85
+
+        if let data = resizedImage.jpegData(compressionQuality: quality) {
             do {
                 try data.write(to: thumbnailURL)
-                print("✅ Saved colored room thumbnail (400x400) to: \(thumbnailURL.lastPathComponent)")
             } catch {
                 print("❌ Failed to save thumbnail: \(error.localizedDescription)")
-                // Post notification about failure
-                NotificationCenter.default.post(
-                    name: Notification.Name("RoomThumbnailSaveFailed"),
-                    object: nil,
-                    userInfo: ["roomURL": roomURL, "error": error]
-                )
             }
         }
     }

@@ -38,6 +38,10 @@ final class RoomEditVC: UIViewController {
     private var selectedModel: ModelEntity?
     private var roomBoundingBox: BoundingBoxEntity?
 
+    // MARK: - Texture cache (loaded once per process, shared across all instances)
+    private static let woodFloorTexture:  TextureResource? = try? TextureResource.load(named: "texture-wooden-board")
+    private static let wallWallpaperTexture: TextureResource? = try? TextureResource.load(named: "wall-wallpaper")
+
     // MARK: - Camera
     private let cameraAnchor = AnchorEntity()
     private let orbitCamera = PerspectiveCamera()
@@ -49,6 +53,7 @@ final class RoomEditVC: UIViewController {
     private var floatingMenuButton: UIButton!
     private var viewDockButton: UIButton!
     private var colorDockButton: UIButton!
+    private var textureDockButton: UIButton!
     private var hideDockButton: UIButton!
     private var labelsDockButton: UIButton!
 
@@ -88,39 +93,41 @@ final class RoomEditVC: UIViewController {
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        
-        // Cleanup labels
+
         cleanupLabels()
         hideRoomRuler()
         disableCollisionFeatures()
-        
-        // Save thumbnail of the colored room when leaving
         saveColoredThumbnail()
     }
-    
+
     // MARK: - Thumbnail Capture
+
+    // Guards against the snapshot callback firing after the VC is gone or a second
+    // save being triggered while the first async callback is still in-flight.
+    private var isSavingThumbnail = false
+
     private func saveColoredThumbnail() {
-        // Always save thumbnail, even if no colors have been applied yet
-        // This ensures newly scanned rooms get thumbnails on first view
-        
-        // Capture snapshot from ARView
+        guard !isSavingThumbnail else { return }
+        isSavingThumbnail = true
+
+        // Capture a strong reference to roomURL before the view might be deallocated.
+        let url = roomURL
+
         arView.snapshot(saveToHDR: false) { [weak self] image in
-            guard let self = self, let image = image else {
-                print("⚠️ Failed to capture ARView snapshot for thumbnail")
+            defer { self?.isSavingThumbnail = false }
+
+            guard let image else {
+                print("⚠️ ARView snapshot returned nil — thumbnail not updated")
                 return
             }
-            
-            // Save the thumbnail
-            RoomColorManager.saveThumbnail(image, for: self.roomURL)
-            
-            // Post notification to refresh thumbnails in MyRooms
+
+            RoomColorManager.saveThumbnail(image, for: url)
+
             NotificationCenter.default.post(
                 name: Notification.Name("RoomThumbnailDidUpdate"),
                 object: nil,
-                userInfo: ["roomURL": self.roomURL]
+                userInfo: ["roomURL": url]
             )
-            
-            print("✅ Saved room thumbnail via ARView snapshot")
         }
     }
 
@@ -156,6 +163,10 @@ final class RoomEditVC: UIViewController {
         colorButton.menu = makeColorMenu()
         stack.addArrangedSubview(colorButton)
         colorDockButton = colorButton
+
+        let textureButton = makeDockItemButton(title: "Texture", systemImage: "photo.on.rectangle", action: #selector(textureDockTapped))
+        stack.addArrangedSubview(textureButton)
+        textureDockButton = textureButton
 
         let hideButton = makeDockItemButton(title: "Hide", systemImage: "eye.slash", action: nil)
         hideButton.showsMenuAsPrimaryAction = true
@@ -585,6 +596,22 @@ final class RoomEditVC: UIViewController {
         updateDockButtonStates()
     }
 
+    @objc private func textureDockTapped() {
+        let picker = TexturePickerViewController()
+        picker.currentFloorTextureName = RoomColorManager.shared.getTextureName(
+            for: RoomColorManager.floorTextureKey, roomURL: roomURL) ?? ""
+        picker.currentWallTextureName = RoomColorManager.shared.getTextureName(
+            for: RoomColorManager.wallTextureKey, roomURL: roomURL) ?? ""
+        picker.delegate = self
+        if let sheet = picker.sheetPresentationController {
+            // Two sections (floor + wall) need more height
+            sheet.detents = [.custom { _ in 360 }]
+            sheet.prefersGrabberVisible = false
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+        }
+        present(picker, animated: true)
+    }
+
     // MARK: - Layout
     private func setupLayout() {
         arView.translatesAutoresizingMaskIntoConstraints = false
@@ -759,32 +786,112 @@ final class RoomEditVC: UIViewController {
         ])
     }
 
+    // MARK: - Floor Texture Material
+
+    /// Returns a PBR material using the user's saved floor texture, or a plain fallback.
+    private func makeFloorMaterial() -> RealityKit.Material {
+        let savedName = RoomColorManager.shared.getTextureName(
+            for: RoomColorManager.floorTextureKey, roomURL: roomURL)
+
+        guard let textureName = savedName, !textureName.isEmpty else {
+            // No texture selected — plain light floor
+            return SimpleMaterial(color: .init(white: 0.76, alpha: 1), roughness: 0.8, isMetallic: false)
+        }
+
+        // Load texture (uses the cached static resource when name matches)
+        let textureResource: TextureResource?
+        if textureName == "texture-wooden-board" {
+            textureResource = RoomEditVC.woodFloorTexture
+        } else {
+            textureResource = try? TextureResource.load(named: textureName)
+        }
+
+        guard let textureResource else {
+            return SimpleMaterial(color: .init(white: 0.76, alpha: 1), roughness: 0.8, isMetallic: false)
+        }
+
+        var mat = PhysicallyBasedMaterial()
+        mat.baseColor = .init(texture: .init(textureResource))
+        mat.roughness = .init(floatLiteral: 0.85)
+        mat.metallic = .init(floatLiteral: 0.0)
+        return mat
+    }
+
+    /// Returns a PBR material using the user's saved wall texture, or a plain fallback.
+    private func makeWallMaterial() -> RealityKit.Material {
+        let savedName = RoomColorManager.shared.getTextureName(
+            for: RoomColorManager.wallTextureKey, roomURL: roomURL)
+
+        guard let textureName = savedName, !textureName.isEmpty else {
+            return SimpleMaterial(color: .init(white: 0.92, alpha: 1), roughness: 0.7, isMetallic: false)
+        }
+
+        let textureResource: TextureResource?
+        if textureName == "wall-wallpaper" {
+            textureResource = RoomEditVC.wallWallpaperTexture
+        } else {
+            textureResource = try? TextureResource.load(named: textureName)
+        }
+
+        guard let textureResource else {
+            return SimpleMaterial(color: .init(white: 0.92, alpha: 1), roughness: 0.7, isMetallic: false)
+        }
+
+        var mat = PhysicallyBasedMaterial()
+        mat.baseColor = .init(texture: .init(textureResource))
+        mat.roughness = .init(floatLiteral: 0.75)
+        mat.metallic = .init(floatLiteral: 0.0)
+        return mat
+    }
+
     // MARK: - Materials & Labels
     private func applyMaterialRules(to root: Entity) {
         let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
-        
+        // Texture takes priority over any bulk-set floor colour.
+        // (It is only nil/empty when the user explicitly removed it via the Texture picker
+        //  or overrode a specific floor entity with a direct colour tap.)
+        let floorTextureActive: Bool = {
+            let name = RoomColorManager.shared.getTextureName(
+                for: RoomColorManager.floorTextureKey, roomURL: roomURL)
+            return name != nil && name?.isEmpty == false
+        }()
+        let wallTextureActive: Bool = {
+            let name = RoomColorManager.shared.getTextureName(
+                for: RoomColorManager.wallTextureKey, roomURL: roomURL)
+            return name != nil && name?.isEmpty == false
+        }()
+
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
 
-            // Cache original materials once
             if originalMaterials[model] == nil {
                 originalMaterials[model] = model.model?.materials
             }
-            
+
             let name = model.name.lowercased()
 
-            // Labels should not depend on "Enable Colors"
             if let yOffset = labelYOffset(for: name) {
                 attachLabel(to: model, text: name, yOffset: yOffset)
             }
 
-            // 🔴 Enable Colors OFF → apply saved colors or white
+            // 🔴 Enable Colors OFF → saved colours or textures
             guard enableColors else {
-                // Check for saved colors first
-                if name.starts(with: "wall"), let color = savedColors[RoomColorManager.wallKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                } else if name.starts(with: "floor"), let color = savedColors[RoomColorManager.floorKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                if name.starts(with: "wall") {
+                    if wallTextureActive {
+                        model.model?.materials = [makeWallMaterial()]
+                    } else if let color = savedColors[RoomColorManager.wallKey] {
+                        model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)]
+                    }
+                } else if name.starts(with: "floor") {
+                    if floorTextureActive {
+                        model.model?.materials = [makeFloorMaterial()]
+                    } else if let color = savedColors[RoomColorManager.floorKey] {
+                        model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [makeFloorMaterial()]
+                    }
                 } else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 } else if name.starts(with: "window"), let color = savedColors[RoomColorManager.windowKey] {
@@ -801,15 +908,24 @@ final class RoomEditVC: UIViewController {
                 return
             }
 
-            // 🟢 Enable Colors ON → apply saved colors or default semantic colors
+            // 🟢 Enable Colors ON → textures win, then saved colours, then semantic defaults
             switch true {
             case name.starts(with: "wall"):
-                let color = savedColors[RoomColorManager.wallKey] ?? .systemBlue
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                if wallTextureActive {
+                    model.model?.materials = [makeWallMaterial()]
+                } else {
+                    let color = savedColors[RoomColorManager.wallKey] ?? .systemBlue
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
 
             case name.starts(with: "floor"):
-                let color = savedColors[RoomColorManager.floorKey] ?? .gray
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                if floorTextureActive {
+                    model.model?.materials = [makeFloorMaterial()]
+                } else if let color = savedColors[RoomColorManager.floorKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                } else {
+                    model.model?.materials = [makeFloorMaterial()]
+                }
 
             case name.starts(with: "chair"):
                 let color = savedColors[RoomColorManager.chairKey] ?? .black
@@ -913,15 +1029,20 @@ final class RoomEditVC: UIViewController {
 
         guard let prefix = prefixes[target] else { return }
 
+        // If a surface texture is active, bulk colour changes must not override it.
+        // The user must tap a specific entity directly to explicitly override with colour.
+        func textureActive(key: String) -> Bool {
+            let n = RoomColorManager.shared.getTextureName(for: key, roomURL: roomURL)
+            return n != nil && n?.isEmpty == false
+        }
+        if target == .floors && textureActive(key: RoomColorManager.floorTextureKey) { return }
+        if target == .walls  && textureActive(key: RoomColorManager.wallTextureKey)  { return }
+
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
             if model.name.lowercased().starts(with: prefix) {
                 model.model?.materials = [
-                    SimpleMaterial(
-                        color: color,
-                        roughness: 0.4,
-                        isMetallic: false
-                    )
+                    SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)
                 ]
             }
         }
@@ -1099,15 +1220,26 @@ extension RoomEditVC: UIColorPickerViewControllerDelegate {
             selectedModel?.model?.materials = [
                 SimpleMaterial(color: selectedColor, roughness: 0.4, isMetallic: false)
             ]
-            // Save color for selected element type
             if let elementType = getElementType(from: selectedModel) {
                 RoomColorManager.shared.saveColor(selectedColor, for: elementType, roomURL: roomURL)
+                // Direct tap on a textured surface: clear the texture so colour wins going forward.
+                if elementType == RoomColorManager.floorKey {
+                    RoomColorManager.shared.saveTextureName(nil, for: RoomColorManager.floorTextureKey, roomURL: roomURL)
+                } else if elementType == RoomColorManager.wallKey {
+                    RoomColorManager.shared.saveTextureName(nil, for: RoomColorManager.wallTextureKey, roomURL: roomURL)
+                }
             }
 
         default:
             setColor(for: colorTarget, color: selectedColor)
-            // Save color for the target type
-            if let elementType = colorTargetToElementType(colorTarget) {
+            // Only persist the colour when no texture is guarding this surface type.
+            func hasTexture(key: String) -> Bool {
+                let n = RoomColorManager.shared.getTextureName(for: key, roomURL: roomURL)
+                return n != nil && n?.isEmpty == false
+            }
+            let blocked = (colorTarget == .floors && hasTexture(key: RoomColorManager.floorTextureKey))
+                       || (colorTarget == .walls  && hasTexture(key: RoomColorManager.wallTextureKey))
+            if !blocked, let elementType = colorTargetToElementType(colorTarget) {
                 RoomColorManager.shared.saveColor(selectedColor, for: elementType, roomURL: roomURL)
             }
         }
@@ -1144,6 +1276,21 @@ extension RoomEditVC: UIColorPickerViewControllerDelegate {
         case .tables: return RoomColorManager.tableKey
         case .storage: return RoomColorManager.storageKey
         case .selected: return nil
+        }
+    }
+}
+
+// MARK: - TexturePickerDelegate
+extension RoomEditVC: TexturePickerDelegate {
+    func texturePicker(_ picker: TexturePickerViewController,
+                       didSelect option: TextureOption,
+                       for surface: TextureSurface) {
+        let nameToSave: String? = option.name.isEmpty ? nil : option.name
+        let key = surface == .floor ? RoomColorManager.floorTextureKey : RoomColorManager.wallTextureKey
+        RoomColorManager.shared.saveTextureName(nameToSave, for: key, roomURL: roomURL)
+
+        if let root = displayedModel {
+            applyMaterialRules(to: root)
         }
     }
 }
