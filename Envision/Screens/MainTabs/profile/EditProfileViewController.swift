@@ -11,6 +11,7 @@ import FirebaseAuth
 
 extension Notification.Name {
     static let profileDidUpdate = Notification.Name("profileDidUpdate")
+    static let tourDidStart = Notification.Name("tourDidStart")
 }
 
 class EditProfileViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -44,7 +45,7 @@ class EditProfileViewController: UIViewController, UIImagePickerControllerDelega
 
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             title: "Save",
-            style: .done,
+            style: .prominent,
             target: self,
             action: #selector(saveTapped)
         )

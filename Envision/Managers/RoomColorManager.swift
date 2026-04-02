@@ -193,7 +193,7 @@ final class RoomColorManager {
         let thumbnailURL = thumbnailURL(for: roomURL)
 
         // Scale-aware target: 400pt × screenScale, capped at 800px to stay reasonable.
-        let screenScale = UIScreen.main.scale
+        let screenScale = UITraitCollection.current.displayScale
         let basePts: CGFloat = 400
         let pixelSize = min(basePts * screenScale, 800)
         let targetSize = CGSize(width: pixelSize, height: pixelSize)

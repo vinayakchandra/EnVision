@@ -6,6 +6,7 @@ final class MainTabBarController: UITabBarController {
         super.viewDidLoad()
         setupTabs()
         setupLiquidGlassEffect()
+        setupTraitChangeObservation()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -58,14 +59,15 @@ final class MainTabBarController: UITabBarController {
         tabBar.isTranslucent = true
     }
 
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        if previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle {
-            applyTabBarAppearance()
+    private func setupTraitChangeObservation() {
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (tabBarController: Self, _) in
+                tabBarController.applyTabBarAppearance()
+            }
         }
     }
 
-    private func showWelcomeTipIfNeeded() {
+    func showWelcomeTipIfNeeded() {
         guard !TourManager.shared.hasSeen(tipID: AppTips.welcome.id) else { return }
         guard !TourManager.shared.tourSkipped, !TourManager.shared.hasCompletedTour else { return }
         guard presentedViewController == nil else { return }
@@ -79,6 +81,7 @@ final class MainTabBarController: UITabBarController {
         alert.addAction(UIAlertAction(title: AppTips.welcome.primaryActionTitle, style: .default) { _ in
             TourManager.shared.startTour()
             TourManager.shared.markTipAsSeen(AppTips.welcome.id)
+            NotificationCenter.default.post(name: .tourDidStart, object: nil)
         })
 
         alert.addAction(UIAlertAction(title: AppTips.welcome.dismissActionTitle, style: .cancel) { _ in

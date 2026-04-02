@@ -124,7 +124,11 @@ final class ViewModelsViewController: UIViewController {
                 heightDimension: .absolute(groupHeight)
             )
 
-            let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitem: item, count: columns)
+            let group = NSCollectionLayoutGroup.horizontal(
+                layoutSize: groupSize,
+                repeatingSubitem: item,
+                count: columns
+            )
             let section = NSCollectionLayoutSection(group: group)
             return section
         }
@@ -230,14 +234,13 @@ final class ViewModelsViewController: UIViewController {
                     try fm.copyItem(at: u, to: dest)
                 } catch {
                     // If copy fails, try using coordinated read / write (best-effort)
-                    do {
-                        let coordinator = NSFileCoordinator()
-                        var coordinationError: NSError? = nil
-                        coordinator.coordinate(readingItemAt: u, options: [], error: &coordinationError) { (newURL) in
-                            try? fm.copyItem(at: newURL, to: dest)
-                        }
-                    } catch {
-                        print("Import copy failed for \(u.lastPathComponent): \(error)")
+                    let coordinator = NSFileCoordinator()
+                    var coordinationError: NSError? = nil
+                    coordinator.coordinate(readingItemAt: u, options: [], error: &coordinationError) { newURL in
+                        try? fm.copyItem(at: newURL, to: dest)
+                    }
+                    if let coordinationError {
+                        print("Import copy failed for \(u.lastPathComponent): \(coordinationError)")
                     }
                 }
 
@@ -291,7 +294,7 @@ final class ViewModelsViewController: UIViewController {
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: size,
-            scale: UIScreen.main.scale,
+            scale: traitCollection.displayScale,
             representationTypes: .all
         )
 

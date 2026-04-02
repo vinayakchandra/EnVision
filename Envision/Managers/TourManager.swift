@@ -14,7 +14,7 @@ final class TourManager {
     // MARK: - Singleton
     
     static let shared = TourManager()
-    private let tipsEnabled = false
+    private let tipsEnabled = true
     
     // MARK: - Private Properties
     
@@ -122,15 +122,14 @@ final class TourManager {
         print(" Tour completed")
     }
     
-    /// Resets all tour progress and tips
+    /// Resets all tour progress and tips. Always executes — not blocked by tipsEnabled,
+    /// because this is a user-initiated action from Profile → Restart Tour.
     func resetTour() {
-        guard tipsEnabled else { return }
         isTourCompleted = false
         currentTourStep = 0
         hasSeenWelcome = false
         tourSkipped = false
         seenTips = []
-
         print("🔄 Tour reset complete")
     }
 

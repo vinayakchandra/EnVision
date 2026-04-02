@@ -20,7 +20,7 @@ final class ARMeshExporter {
         let asset = MDLAsset()
 
         for anchor in meshAnchors {
-            let mesh = anchor.geometry
+            _ = anchor.geometry
             let mdlMesh = MDLMesh()
             asset.add(mdlMesh)
         }

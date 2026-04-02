@@ -22,7 +22,7 @@ enum RoomCategory: String, Codable, CaseIterable {
         }
     }
 
-    var color: UIColor {
+    @MainActor var color: UIColor {
         switch self {
         case .livingRoom: .systemOrange
         case .bedroom: .systemPurple
@@ -46,7 +46,7 @@ enum RoomType: String, Codable, CaseIterable {
         }
     }
 
-    var color: UIColor {
+    @MainActor var color: UIColor {
         switch self {
         case .parametric: .systemTeal
         case .textured: .systemPink

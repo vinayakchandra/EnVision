@@ -37,15 +37,17 @@ final class TipCoordinator {
         containerView.addSubview(tipView)
         NSLayoutConstraint.activate([
             tipView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            tipView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            tipView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12)
+            tipView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            tipView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            // Critical: without this the container stays zero-height and touches don't register
+            tipView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
         ])
 
         containerView.superview?.bringSubviewToFront(containerView)
         containerView.layoutIfNeeded()
         let measuredHeight = tipView.systemLayoutSizeFitting(
             CGSize(
-                width: max(1, containerView.bounds.width - 24),
+                width: max(1, containerView.bounds.width),
                 height: UIView.layoutFittingCompressedSize.height
             ),
             withHorizontalFittingPriority: .required,
@@ -68,7 +70,7 @@ final class TipCoordinator {
     }
 
     private func hasSeen(tipID: String) -> Bool {
-        TourManager.shared.seenTips.contains(tipID)
+        TourManager.shared.hasSeen(tipID: tipID)
     }
 
     private func markAsSeen(tipID: String) {

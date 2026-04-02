@@ -211,12 +211,17 @@ extension CreateModelViewController {
                     case .requestComplete(_, _):
                         DispatchQueue.main.async {
                             self.hideProgressUI()
+                            BackgroundModelProcessor.shared.postModelGenerationNotification(success: true)
                             self.askUserForFilename(finalURL: outputURL)
                         }
 
                     case .requestError(_, let error):
                         DispatchQueue.main.async {
                             self.hideProgressUI()
+                            BackgroundModelProcessor.shared.postModelGenerationNotification(
+                                success: false,
+                                errorMessage: error.localizedDescription
+                            )
                             self.showAlert(title: "Processing Error", message: error.localizedDescription)
                         }
 
@@ -232,13 +237,17 @@ extension CreateModelViewController {
                     case .processingCancelled:
                         print("Processing cancelled.")
 
-                    @unknown default:
+                    default:
                         print("Unknown output.")
                     }
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.hideProgressUI()
+                    BackgroundModelProcessor.shared.postModelGenerationNotification(
+                        success: false,
+                        errorMessage: error.localizedDescription
+                    )
                     self.showAlert(title: "Session Output Error", message: error.localizedDescription)
                 }
             }
@@ -250,6 +259,10 @@ extension CreateModelViewController {
             } catch {
                 DispatchQueue.main.async {
                     self.hideProgressUI()
+                    BackgroundModelProcessor.shared.postModelGenerationNotification(
+                        success: false,
+                        errorMessage: error.localizedDescription
+                    )
                     self.showAlert(title: "Process Error", message: error.localizedDescription)
                 }
             }
