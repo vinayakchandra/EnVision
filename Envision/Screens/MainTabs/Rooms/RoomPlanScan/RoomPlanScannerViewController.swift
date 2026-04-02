@@ -24,7 +24,7 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
         let btn = UIButton(type: .system)
         btn.setTitle("Save", for: .normal)
         btn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-        btn.backgroundColor = UIColor(red: 173 / 255, green: 106 / 255, blue: 64 / 255, alpha: 1)
+        btn.backgroundColor = AppColors.accent
         btn.tintColor = .white
         btn.layer.cornerRadius = 18
         btn.alpha = 1
@@ -52,6 +52,23 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
         setupCaptureView()
         setupSaveButton()
         startRoomCapture()
+
+        if LiDAROnboardingView.shouldShow {
+            showLiDAROnboarding()
+        }
+    }
+
+    // MARK: - LiDAR Onboarding
+
+    private func showLiDAROnboarding() {
+        // Pause capture until the user finishes reading
+        captureView.captureSession.stop(pauseARSession: true)
+
+        let onboarding = LiDAROnboardingView()
+        onboarding.onDismiss = { [weak self] in
+            self?.captureView.captureSession.run(configuration: RoomCaptureSession.Configuration())
+        }
+        onboarding.present(in: view)
     }
 
     // MARK: - Setup

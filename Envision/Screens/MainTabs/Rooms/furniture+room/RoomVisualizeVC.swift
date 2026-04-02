@@ -75,6 +75,15 @@ final class RoomVisualizeVC: UIViewController {
         loadRoom()
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopProximityUpdatesOnLifecycleExit()
+    }
+
+    deinit {
+        stopProximityUpdatesOnLifecycleExit()
+    }
+
     // MARK: - Layout
     private func setupLayout() {
         arView.translatesAutoresizingMaskIntoConstraints = false
@@ -322,6 +331,13 @@ final class RoomVisualizeVC: UIViewController {
     private func stopProximityUpdates() {
         proximityUpdateTimer?.invalidate()
         proximityUpdateTimer = nil
+    }
+
+    private func stopProximityUpdatesOnLifecycleExit() {
+        stopProximityUpdates()
+        isProximityModeActive = false
+        trackedFurnitureForProximity.removeAll()
+        proximitySystem.clearIndicators()
     }
     
     private func updateProximityMeasurements() {
@@ -889,34 +905,44 @@ final class RoomVisualizeVC: UIViewController {
     }
     
     private func applySavedColors(to root: ModelEntity) {
-        let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
-        
-        guard !savedColors.isEmpty else { return }
-        
+        let savedColors      = RoomColorManager.shared.getAllColors(for: roomURL)
+        let floorTextureName = RoomColorManager.shared.getTextureName(for: RoomColorManager.floorTextureKey, roomURL: roomURL)
+        let wallTextureName  = RoomColorManager.shared.getTextureName(for: RoomColorManager.wallTextureKey,  roomURL: roomURL)
+
+        func pbr(named assetName: String, roughness: Float) -> RealityKit.Material? {
+            guard let texture = try? TextureResource.load(named: assetName) else { return nil }
+            var mat = PhysicallyBasedMaterial()
+            mat.baseColor = .init(texture: .init(texture))
+            mat.roughness = .init(floatLiteral: roughness)
+            mat.metallic  = .init(floatLiteral: 0.0)
+            return mat
+        }
+
         root.visit { entity in
             guard let model = entity as? ModelEntity else { return }
             let name = model.name.lowercased()
-            
-            // Check each element type and apply saved color if available
-            if name.starts(with: "wall"), let color = savedColors[RoomColorManager.wallKey] {
+
+            if name.starts(with: "wall") {
+                if let tex = wallTextureName, !tex.isEmpty, let mat = pbr(named: tex, roughness: 0.75) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.wallKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
+            } else if name.starts(with: "floor") {
+                if let tex = floorTextureName, !tex.isEmpty, let mat = pbr(named: tex, roughness: 0.85) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.floorKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                }
+            } else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            }
-            else if name.starts(with: "floor"), let color = savedColors[RoomColorManager.floorKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
-            }
-            else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
+            } else if name.starts(with: "window"), let color = savedColors[RoomColorManager.windowKey] {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            }
-            else if name.starts(with: "window"), let color = savedColors[RoomColorManager.windowKey] {
+            } else if name.starts(with: "table"), let color = savedColors[RoomColorManager.tableKey] {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            }
-            else if name.starts(with: "table"), let color = savedColors[RoomColorManager.tableKey] {
+            } else if name.starts(with: "chair"), let color = savedColors[RoomColorManager.chairKey] {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            }
-            else if name.starts(with: "chair"), let color = savedColors[RoomColorManager.chairKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            }
-            else if name.starts(with: "storage"), let color = savedColors[RoomColorManager.storageKey] {
+            } else if name.starts(with: "storage"), let color = savedColors[RoomColorManager.storageKey] {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
             }
         }

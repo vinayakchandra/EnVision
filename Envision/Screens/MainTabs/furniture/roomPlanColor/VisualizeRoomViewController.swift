@@ -9,11 +9,31 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
 
     // MARK: - State Storage
     var selectedModel: ModelEntity?
-    var showLabels = false   // start OFF
-    var colorToggleIsOn = false  // start OFF
+    var showLabels = false
+    var colorToggleIsOn = false
 
     var originalMaterials: [ModelEntity: [Material]] = [:]
-    var labelStorage: [Entity: Entity] = [:] // Parent -> Label
+    var labelStorage: [Entity: Entity] = [:]
+
+    // MARK: - Loaded Model Reference
+    var loadedEntity: Entity?
+    var modelAnchor: AnchorEntity?
+
+    // MARK: - Measurement State
+    var showBoundingBox = false
+    var activeBoundingBoxAnchor: AnchorEntity?
+
+    var isPointToPointActive = false
+    var pendingPointA: SIMD3<Float>?
+    var pointAMarkerAnchor: AnchorEntity?
+    var measurementAnchors: [AnchorEntity] = []
+
+    var measurementUnit: MeasurementUnit = MeasurementManager.shared.currentUnit
+
+    // Measurement toolbar buttons (kept as properties to update their appearance)
+    var bboxButton: UIButton?
+    var p2pButton: UIButton?
+    var unitButton: UIButton?
 
     // MARK: - Init
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -35,6 +55,7 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
         arView.frame = view.bounds
 
         setupToggleUI()
+        setupMeasurementToolbar()
         setupAR()
         setupTapGesture()
         presentModelPicker()
@@ -113,6 +134,11 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
 
     @objc func handleTap(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: arView)
+
+        if isPointToPointActive {
+            handlePointToPointTap(at: location)
+            return
+        }
 
         if let result = arView.entity(at: location),
            let model = result as? ModelEntity {
@@ -198,7 +224,6 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
     }
 
     func placeModel(_ room: Entity) {
-
         room.scale = [0.005, 0.005, 0.005]
         room.generateCollisionShapes(recursive: true)
 
@@ -211,6 +236,9 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
         let anchor = AnchorEntity(world: .zero)
         anchor.addChild(room)
         arView.scene.addAnchor(anchor)
+
+        loadedEntity = room
+        modelAnchor = anchor
     }
 
     // ----------------------------------------------------------
@@ -298,6 +326,7 @@ class VisualizeRoomViewController: UIViewController, UIDocumentPickerDelegate {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         cleanupLabels()
+        clearAllMeasurements()
     }
 }
 

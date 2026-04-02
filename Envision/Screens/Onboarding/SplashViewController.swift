@@ -35,7 +35,7 @@ class SplashViewController: UIViewController {
         lbl.text = "See it in your space, before you buy it."
         lbl.font = UIFont.systemFont(ofSize: 14)
         lbl.textAlignment = .center
-        lbl.textColor = .darkGray
+        lbl.textColor = .secondaryLabel
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
     }()

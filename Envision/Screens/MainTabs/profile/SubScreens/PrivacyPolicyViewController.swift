@@ -47,7 +47,7 @@ class PrivacyPolicyViewController: UIViewController {
     private let privacyText = """
     PRIVACY POLICY
     
-    Last Updated: December 2025
+    Last Updated: April 2026
     
     1. INTRODUCTION
     
@@ -55,15 +55,18 @@ class PrivacyPolicyViewController: UIViewController {
     
     2. INFORMATION WE COLLECT
     
+    Account & Identity Data:
+    • If you sign in, authentication data is processed via Firebase Authentication and Google Sign-In (when selected)
+    • Basic profile data such as name and email may be associated with your account
+    
     Local Data Storage:
     • Room scans and 3D models are stored locally on your device
-    • Profile information (name, email) is stored locally
+    • Cached profile information and app preferences may be stored locally
     • App preferences and settings
     
     We DO NOT collect:
     • Location data
-    • Personal photos (unless you choose to set a profile picture)
-    • Room scan data on our servers
+    • Room scan geometry/model files on our servers by default
     
     3. HOW WE USE YOUR INFORMATION
     
@@ -75,7 +78,7 @@ class PrivacyPolicyViewController: UIViewController {
     
     4. DATA STORAGE
     
-    All your scans and models are stored locally on your device. We do not upload or sync your room data to any external servers. Your data remains private and under your control.
+    Room scans and 3D models are stored locally on your device. Authentication and account-related identity data are handled by Firebase services. Your exported files are only shared when you explicitly choose to share them.
     
     5. CAMERA AND SENSORS
     
@@ -88,7 +91,7 @@ class PrivacyPolicyViewController: UIViewController {
     
     6. DATA SHARING
     
-    We do not sell, trade, or share your personal information with third parties. You may choose to export and share your scanned models, but this is entirely at your discretion.
+    We do not sell your personal information. We use trusted service providers (such as Firebase/Google authentication services) to operate sign-in features. You may choose to export and share scanned models at your discretion.
     
     7. DATA SECURITY
     
@@ -101,7 +104,7 @@ class PrivacyPolicyViewController: UIViewController {
     9. YOUR RIGHTS
     
     You have the right to:
-    • Access your data (stored locally on your device)
+    • Access your locally stored room/model data on your device
     • Delete your data by uninstalling the app
     • Export your scanned models
     • Modify your profile information

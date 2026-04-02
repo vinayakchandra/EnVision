@@ -32,24 +32,37 @@ final class MainTabBarController: UITabBarController {
     }
 
     private func setupLiquidGlassEffect() {
+        applyTabBarAppearance()
+    }
+
+    private func applyTabBarAppearance() {
+        let isDark = traitCollection.userInterfaceStyle == .dark
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialLight)
-        appearance.backgroundColor = UIColor.white.withAlphaComponent(0.8)
+        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        appearance.backgroundColor = isDark
+            ? UIColor.black.withAlphaComponent(0.6)
+            : UIColor.white.withAlphaComponent(0.8)
 
         tabBar.layer.cornerRadius = 30
         tabBar.layer.masksToBounds = true
         tabBar.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 
-        // Add subtle shadow
         tabBar.layer.shadowColor = UIColor.black.cgColor
-        tabBar.layer.shadowOpacity = 0.1
+        tabBar.layer.shadowOpacity = isDark ? 0.3 : 0.1
         tabBar.layer.shadowOffset = CGSize(width: 0, height: -2)
         tabBar.layer.shadowRadius = 10
 
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
         tabBar.isTranslucent = true
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle {
+            applyTabBarAppearance()
+        }
     }
 
     private func showWelcomeTipIfNeeded() {

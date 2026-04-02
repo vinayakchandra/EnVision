@@ -10,7 +10,7 @@ final class InstructionOverlay: UIView {
     var onContinue: (() -> Void)?
 
     private let bgView: UIVisualEffectView = {
-        let blur = UIBlurEffect(style: .systemUltraThinMaterialLight)
+        let blur = UIBlurEffect(style: .systemUltraThinMaterial)
         return UIVisualEffectView(effect: blur)
     }()
 
@@ -19,7 +19,7 @@ final class InstructionOverlay: UIView {
         label.text = "Before you start Scanning"
         label.font = .systemFont(ofSize: 18, weight: .semibold)
         label.textAlignment = .center
-        label.textColor = .black
+        label.textColor = .label
         return label
     }()
 
@@ -31,7 +31,7 @@ Clear the floor
 Move phone slowly around the furniture
 """
         label.font = .systemFont(ofSize: 14)
-        label.textColor = .darkGray
+        label.textColor = .secondaryLabel
         label.textAlignment = .center
         label.numberOfLines = 0
         return label
