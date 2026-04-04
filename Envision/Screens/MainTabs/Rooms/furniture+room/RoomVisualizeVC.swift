@@ -10,6 +10,7 @@ final class RoomVisualizeVC: UIViewController {
     private var roomModel: ModelEntity?
     private var displayedModel: ModelEntity?
     private var placedFurniture: [ModelEntity] = []
+    private var hiddenEntityPrefixes: Set<String> = []
     private var selectedFurniture: ModelEntity?
     private var isMeasuringMode = false
     private var measurementPoints: [SIMD3<Float>] = []
@@ -956,6 +957,8 @@ final class RoomVisualizeVC: UIViewController {
         
         // Apply saved colors from RoomColorManager
         applySavedColors(to: clone)
+        hiddenEntityPrefixes = RoomColorManager.shared.getHiddenEntityPrefixes(roomURL: roomURL)
+        applyEntityVisibilityRules()
 
         let anchor = AnchorEntity(world: .zero)
         anchor.addChild(clone)
@@ -987,12 +990,16 @@ final class RoomVisualizeVC: UIViewController {
                     model.model?.materials = [mat]
                 } else if let color = savedColors[RoomColorManager.wallKey] {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                } else {
+                    model.model?.materials = [SimpleMaterial(color: .init(white: 0.92, alpha: 1), roughness: 0.7, isMetallic: false)]
                 }
             } else if name.starts(with: "floor") {
                 if let tex = floorTextureName, !tex.isEmpty, let mat = pbr(named: tex, roughness: 0.85) {
                     model.model?.materials = [mat]
                 } else if let color = savedColors[RoomColorManager.floorKey] {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
+                } else {
+                    model.model?.materials = [SimpleMaterial(color: .init(white: 0.76, alpha: 1), roughness: 0.8, isMetallic: false)]
                 }
             } else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
@@ -1006,6 +1013,22 @@ final class RoomVisualizeVC: UIViewController {
                 model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
             }
         }
+    }
+
+    private func applyEntityVisibilityRules() {
+        guard let root = displayedModel else { return }
+        root.visit {
+            guard let model = $0 as? ModelEntity else { return }
+            let name = model.name.lowercased()
+            if let prefix = entityPrefix(for: name) {
+                model.isEnabled = !hiddenEntityPrefixes.contains(prefix)
+            }
+        }
+    }
+
+    private func entityPrefix(for name: String) -> String? {
+        let prefixes = ["wall", "floor", "door", "window", "table", "chair", "storage"]
+        return prefixes.first(where: { name.starts(with: $0) })
     }
 
     private func fitToScreen(_ model: ModelEntity) {
