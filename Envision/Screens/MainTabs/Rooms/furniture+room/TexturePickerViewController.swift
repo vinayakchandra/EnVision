@@ -2,22 +2,51 @@
 //  TexturePickerViewController.swift
 //  Envision
 //
-//  Bottom-sheet picker showing Floor and Wall texture sections side by side.
+//  Bottom-sheet picker showing texture sections for room entities.
 //
 
 import UIKit
 
 // MARK: - Surface
 
-enum TextureSurface {
+enum TextureSurface: CaseIterable {
     case floor
     case wall
+    case door
+    case window
+    case table
+    case chair
+    case storage
+
+    var title: String {
+        switch self {
+        case .floor: return "Floor"
+        case .wall: return "Wall"
+        case .door: return "Door"
+        case .window: return "Window"
+        case .table: return "Table"
+        case .chair: return "Chair"
+        case .storage: return "Storage"
+        }
+    }
+
+    var surfaceKind: RoomColorManager.TextureSurfaceKind {
+        switch self {
+        case .floor: return .floor
+        case .wall: return .wall
+        case .door: return .door
+        case .window: return .window
+        case .table: return .table
+        case .chair: return .chair
+        case .storage: return .storage
+        }
+    }
 }
 
 // MARK: - Option
 
 struct TextureOption {
-    /// Asset catalog name. Empty string means "no texture / None".
+    /// Texture key name. Empty string means "no texture / None".
     let name: String
     let displayName: String
 }
@@ -40,21 +69,14 @@ final class TexturePickerViewController: UIViewController {
 
     weak var delegate: TexturePickerDelegate?
 
-    /// Set before presenting so the active selection is highlighted.
-    var currentFloorTextureName: String = ""
-    var currentWallTextureName: String  = ""
+    /// Set before presenting so active selections are highlighted.
+    var currentTextureNames: [TextureSurface: String] = [:]
 
     // MARK: - Catalogue
 
-    static let floorTextures: [TextureOption] = [
-        TextureOption(name: "",                     displayName: "None"),
-        TextureOption(name: "texture-wooden-board", displayName: "Wood Floor"),
-    ]
-
-    static let wallTextures: [TextureOption] = [
-        TextureOption(name: "",               displayName: "None"),
-        TextureOption(name: "wall-wallpaper", displayName: "Wallpaper"),
-    ]
+    private let orderedSurfaces: [TextureSurface] = [.floor, .wall, .door, .window, .table, .chair, .storage]
+    private var optionsBySurface: [TextureSurface: [TextureOption]] = [:]
+    private var collectionViewsBySurface: [TextureSurface: UICollectionView] = [:]
 
     // MARK: - Views
 
@@ -75,8 +97,21 @@ final class TexturePickerViewController: UIViewController {
         return lbl
     }()
 
-    private lazy var floorCollectionView = makeCollectionView(tag: 0)
-    private lazy var wallCollectionView  = makeCollectionView(tag: 1)
+    private let scrollView: UIScrollView = {
+        let v = UIScrollView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.showsVerticalScrollIndicator = true
+        v.alwaysBounceVertical = true
+        return v
+    }()
+
+    private let contentStack: UIStackView = {
+        let stack = UIStackView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.spacing = 4
+        return stack
+    }()
 
     // MARK: - Lifecycle
 
@@ -87,20 +122,14 @@ final class TexturePickerViewController: UIViewController {
         view.layer.cornerCurve = .continuous
         view.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 
-        let floorHeader = makeSectionHeader("Floor")
-        let wallHeader  = makeSectionHeader("Wall")
-
-        let stack = UIStackView(arrangedSubviews: [
-            floorHeader, floorCollectionView,
-            wallHeader,  wallCollectionView,
-        ])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .vertical
-        stack.spacing = 4
+        reloadTextureOptions()
+        buildSections()
 
         view.addSubview(handleBar)
         view.addSubview(titleLabel)
-        view.addSubview(stack)
+        view.addSubview(scrollView)
+
+        scrollView.addSubview(contentStack)
 
         NSLayoutConstraint.activate([
             handleBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 10),
@@ -111,17 +140,49 @@ final class TexturePickerViewController: UIViewController {
             titleLabel.topAnchor.constraint(equalTo: handleBar.bottomAnchor, constant: 14),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
 
-            stack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
+            scrollView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
 
-            floorCollectionView.heightAnchor.constraint(equalToConstant: 118),
-            wallCollectionView.heightAnchor.constraint(equalToConstant: 118),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
     }
 
     // MARK: - Helpers
+
+    private func buildSections() {
+        orderedSurfaces.forEach { surface in
+            if currentTextureNames[surface] == nil {
+                currentTextureNames[surface] = ""
+            }
+
+            let header = makeSectionHeader(surface.title)
+            let collectionView = makeCollectionView(tag: tag(for: surface))
+            collectionViewsBySurface[surface] = collectionView
+
+            contentStack.addArrangedSubview(header)
+            contentStack.addArrangedSubview(collectionView)
+            collectionView.heightAnchor.constraint(equalToConstant: 118).isActive = true
+        }
+    }
+
+    private func reloadTextureOptions() {
+        let manager = RoomColorManager.shared
+        manager.ensureBundledTexturesAvailable()
+
+        for surface in orderedSurfaces {
+            let items = manager.availableTextureItems(for: surface.surfaceKind)
+            let options = [TextureOption(name: "", displayName: "None")] + items.map {
+                TextureOption(name: $0.name, displayName: $0.displayName)
+            }
+            optionsBySurface[surface] = options
+        }
+    }
 
     private func makeCollectionView(tag: Int) -> UICollectionView {
         let layout = UICollectionViewFlowLayout()
@@ -141,14 +202,13 @@ final class TexturePickerViewController: UIViewController {
         return cv
     }
 
-    private func makeSectionHeader(_ title: String) -> UILabel {
+    private func makeSectionHeader(_ title: String) -> UIView {
         let lbl = UILabel()
         lbl.translatesAutoresizingMaskIntoConstraints = false
         lbl.text = title.uppercased()
         lbl.font = .systemFont(ofSize: 11, weight: .semibold)
         lbl.textColor = UIColor(white: 0.55, alpha: 1)
-        lbl.layoutMargins = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)
-        // Indent text via a container view
+
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(lbl)
@@ -158,7 +218,16 @@ final class TexturePickerViewController: UIViewController {
             lbl.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             lbl.trailingAnchor.constraint(equalTo: container.trailingAnchor),
         ])
-        return lbl
+        return container
+    }
+
+    private func tag(for surface: TextureSurface) -> Int {
+        orderedSurfaces.firstIndex(of: surface) ?? 0
+    }
+
+    private func surface(for tag: Int) -> TextureSurface? {
+        guard tag >= 0, tag < orderedSurfaces.count else { return nil }
+        return orderedSurfaces[tag]
     }
 }
 
@@ -166,40 +235,32 @@ final class TexturePickerViewController: UIViewController {
 
 extension TexturePickerViewController: UICollectionViewDataSource, UICollectionViewDelegate {
 
-    private var floorOptions: [TextureOption] { TexturePickerViewController.floorTextures }
-    private var wallOptions:  [TextureOption] { TexturePickerViewController.wallTextures  }
-
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        collectionView.tag == 0 ? floorOptions.count : wallOptions.count
+        guard let surface = surface(for: collectionView.tag) else { return 0 }
+        return optionsBySurface[surface]?.count ?? 0
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: TextureCell.reuseID, for: indexPath) as! TextureCell
+            withReuseIdentifier: TextureCell.reuseID,
+            for: indexPath
+        ) as! TextureCell
 
-        if collectionView.tag == 0 {
-            let option = floorOptions[indexPath.item]
-            cell.configure(with: option, selected: option.name == currentFloorTextureName)
-        } else {
-            let option = wallOptions[indexPath.item]
-            cell.configure(with: option, selected: option.name == currentWallTextureName)
-        }
+        guard let surface = surface(for: collectionView.tag) else { return cell }
+        guard let option = optionsBySurface[surface]?[indexPath.item] else { return cell }
+
+        let selectedName = currentTextureNames[surface] ?? ""
+        cell.configure(with: option, selected: option.name == selectedName)
         return cell
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if collectionView.tag == 0 {
-            let option = floorOptions[indexPath.item]
-            currentFloorTextureName = option.name
-            collectionView.reloadData()
-            delegate?.texturePicker(self, didSelect: option, for: .floor)
-        } else {
-            let option = wallOptions[indexPath.item]
-            currentWallTextureName = option.name
-            collectionView.reloadData()
-            delegate?.texturePicker(self, didSelect: option, for: .wall)
-        }
-        // Don't auto-dismiss — let the user set both surfaces before closing
+        guard let surface = surface(for: collectionView.tag) else { return }
+        guard let option = optionsBySurface[surface]?[indexPath.item] else { return }
+
+        currentTextureNames[surface] = option.name
+        collectionView.reloadData()
+        delegate?.texturePicker(self, didSelect: option, for: surface)
     }
 }
 
@@ -275,7 +336,7 @@ private final class TextureCell: UICollectionViewCell {
             imageView.tintColor = .secondaryLabel
             imageView.contentMode = .center
         } else {
-            imageView.image = UIImage(named: option.name)
+            imageView.image = RoomColorManager.shared.texturePreviewImage(named: option.name)
             imageView.contentMode = .scaleAspectFill
             imageView.tintColor = nil
             imageView.backgroundColor = UIColor(white: 0.25, alpha: 1)

@@ -10,8 +10,6 @@ final class RoomVisualizeVC: UIViewController {
     private var roomModel: ModelEntity?
     private var displayedModel: ModelEntity?
     private var placedFurniture: [ModelEntity] = []
-    private var hiddenEntityPrefixes: Set<String> = []
-    private var selectedFurniture: ModelEntity?
     private var isMeasuringMode = false
     private var measurementPoints: [SIMD3<Float>] = []
     private var measurementLabel: UILabel?
@@ -29,7 +27,6 @@ final class RoomVisualizeVC: UIViewController {
     private var proximityUpdateTimer: Timer?
     private var isProximityModeActive = false
     private var trackedFurnitureForProximity: [ModelEntity] = []
-    private var furnitureSelectionTapGesture: UITapGestureRecognizer?
     
     private enum MeasurementModeType {
         case pointToPoint    // Original: tap two points
@@ -75,6 +72,7 @@ final class RoomVisualizeVC: UIViewController {
         setupLayout()
         setupNavigation()
         setupGestures()
+        RoomColorManager.shared.ensureBundledTexturesAvailable()
         loadRoom()
     }
 
@@ -245,17 +243,21 @@ final class RoomVisualizeVC: UIViewController {
     private func showMeasurementOptions() {
         let alert = UIAlertController(title: "Measurement Mode", message: "Choose what to measure", preferredStyle: .actionSheet)
         
-        alert.addAction(UIAlertAction(title: "Room Dimensions", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "📏 Point to Point", style: .default) { [weak self] _ in
+            self?.enterMeasurementMode(type: .pointToPoint)
+        })
+        
+        alert.addAction(UIAlertAction(title: "📦 Room Dimensions", style: .default) { [weak self] _ in
             self?.enterMeasurementMode(type: .room)
         })
         
         if !placedFurniture.isEmpty {
-            alert.addAction(UIAlertAction(title: "Furniture Dimensions", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "🪑 Furniture Dimensions", style: .default) { [weak self] _ in
                 self?.enterMeasurementMode(type: .furniture)
             })
             
             // NEW: Proximity measurement option
-            alert.addAction(UIAlertAction(title: "Furniture Proximity (Auto)", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "📐 Furniture Proximity (Auto)", style: .default) { [weak self] _ in
                 self?.enterMeasurementMode(type: .proximity)
             })
         }
@@ -873,56 +875,6 @@ final class RoomVisualizeVC: UIViewController {
     private func setupGestures() {
         arView.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handlePan)))
         arView.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(handlePinch)))
-        setupFurnitureSelectionTapGesture()
-    }
-
-    private func setupFurnitureSelectionTapGesture() {
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleFurnitureSelectionTap(_:)))
-        tap.cancelsTouchesInView = false
-        arView.addGestureRecognizer(tap)
-        furnitureSelectionTapGesture = tap
-    }
-
-    @objc private func handleFurnitureSelectionTap(_ gesture: UITapGestureRecognizer) {
-        guard !isMeasuringMode else { return }
-        let location = gesture.location(in: arView)
-        guard let furniture = resolveFurniture(at: location) else { return }
-        selectFurniture(furniture, animated: true)
-    }
-
-    private func resolveFurniture(at location: CGPoint) -> ModelEntity? {
-        // Preferred: direct hit-test to tapped entity.
-        if let tappedEntity = arView.entity(at: location) {
-            for furniture in placedFurniture where tappedEntity == furniture || isDescendant(tappedEntity, of: furniture) {
-                return furniture
-            }
-        }
-
-        // Fallback: choose nearest furniture in screen space.
-        let nearest = placedFurniture.min { lhs, rhs in
-            let lhs2D = arView.project(lhs.position(relativeTo: nil)) ?? .zero
-            let rhs2D = arView.project(rhs.position(relativeTo: nil)) ?? .zero
-            let lhsDist = hypot(lhs2D.x - location.x, lhs2D.y - location.y)
-            let rhsDist = hypot(rhs2D.x - location.x, rhs2D.y - location.y)
-            return lhsDist < rhsDist
-        }
-
-        return nearest
-    }
-
-    private func selectFurniture(_ model: ModelEntity, animated: Bool) {
-        selectedFurniture = model
-        showControls(for: model)
-        guard animated else { return }
-        animateSelectionFeedback(for: model)
-    }
-
-    private func animateSelectionFeedback(for model: ModelEntity) {
-        let originalScale = model.scale
-        model.scale = originalScale * SIMD3<Float>(repeating: 1.03)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            model.scale = originalScale
-        }
     }
 
     // MARK: - Loading
@@ -957,8 +909,6 @@ final class RoomVisualizeVC: UIViewController {
         
         // Apply saved colors from RoomColorManager
         applySavedColors(to: clone)
-        hiddenEntityPrefixes = RoomColorManager.shared.getHiddenEntityPrefixes(roomURL: roomURL)
-        applyEntityVisibilityRules()
 
         let anchor = AnchorEntity(world: .zero)
         anchor.addChild(clone)
@@ -968,16 +918,24 @@ final class RoomVisualizeVC: UIViewController {
     }
     
     private func applySavedColors(to root: ModelEntity) {
-        let savedColors      = RoomColorManager.shared.getAllColors(for: roomURL)
-        let floorTextureName = RoomColorManager.shared.getTextureName(for: RoomColorManager.floorTextureKey, roomURL: roomURL)
-        let wallTextureName  = RoomColorManager.shared.getTextureName(for: RoomColorManager.wallTextureKey,  roomURL: roomURL)
+        let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
+        let textureNames: [String: String] = [
+            RoomColorManager.floorTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.floorTextureKey, roomURL: roomURL) ?? "",
+            RoomColorManager.wallTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.wallTextureKey, roomURL: roomURL) ?? "",
+            RoomColorManager.doorTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.doorTextureKey, roomURL: roomURL) ?? "",
+            RoomColorManager.windowTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.windowTextureKey, roomURL: roomURL) ?? "",
+            RoomColorManager.tableTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.tableTextureKey, roomURL: roomURL) ?? "",
+            RoomColorManager.chairTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.chairTextureKey, roomURL: roomURL) ?? "",
+            RoomColorManager.storageTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.storageTextureKey, roomURL: roomURL) ?? ""
+        ]
 
-        func pbr(named assetName: String, roughness: Float) -> RealityKit.Material? {
-            guard let texture = try? TextureResource.load(named: assetName) else { return nil }
+        func pbr(textureKey: String, roughness: Float) -> RealityKit.Material? {
+            guard let name = textureNames[textureKey], !name.isEmpty else { return nil }
+            guard let texture = RoomColorManager.shared.textureResource(named: name) else { return nil }
             var mat = PhysicallyBasedMaterial()
             mat.baseColor = .init(texture: .init(texture))
             mat.roughness = .init(floatLiteral: roughness)
-            mat.metallic  = .init(floatLiteral: 0.0)
+            mat.metallic = .init(floatLiteral: 0.0)
             return mat
         }
 
@@ -985,50 +943,50 @@ final class RoomVisualizeVC: UIViewController {
             guard let model = entity as? ModelEntity else { return }
             let name = model.name.lowercased()
 
-            if name.starts(with: "wall") {
-                if let tex = wallTextureName, !tex.isEmpty, let mat = pbr(named: tex, roughness: 0.75) {
+            if name.contains("wall") {
+                if let mat = pbr(textureKey: RoomColorManager.wallTextureKey, roughness: 0.75) {
                     model.model?.materials = [mat]
                 } else if let color = savedColors[RoomColorManager.wallKey] {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                } else {
-                    model.model?.materials = [SimpleMaterial(color: .init(white: 0.92, alpha: 1), roughness: 0.7, isMetallic: false)]
                 }
-            } else if name.starts(with: "floor") {
-                if let tex = floorTextureName, !tex.isEmpty, let mat = pbr(named: tex, roughness: 0.85) {
+            } else if name.contains("floor") {
+                if let mat = pbr(textureKey: RoomColorManager.floorTextureKey, roughness: 0.85) {
                     model.model?.materials = [mat]
                 } else if let color = savedColors[RoomColorManager.floorKey] {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
-                } else {
-                    model.model?.materials = [SimpleMaterial(color: .init(white: 0.76, alpha: 1), roughness: 0.8, isMetallic: false)]
                 }
-            } else if name.starts(with: "door"), let color = savedColors[RoomColorManager.doorKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            } else if name.starts(with: "window"), let color = savedColors[RoomColorManager.windowKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            } else if name.starts(with: "table"), let color = savedColors[RoomColorManager.tableKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            } else if name.starts(with: "chair"), let color = savedColors[RoomColorManager.chairKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-            } else if name.starts(with: "storage"), let color = savedColors[RoomColorManager.storageKey] {
-                model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+            } else if name.contains("door") {
+                if let mat = pbr(textureKey: RoomColorManager.doorTextureKey, roughness: 0.4) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.doorKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
+            } else if name.contains("window") {
+                if let mat = pbr(textureKey: RoomColorManager.windowTextureKey, roughness: 0.4) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.windowKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
+            } else if name.contains("table") {
+                if let mat = pbr(textureKey: RoomColorManager.tableTextureKey, roughness: 0.4) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.tableKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
+            } else if name.contains("chair") {
+                if let mat = pbr(textureKey: RoomColorManager.chairTextureKey, roughness: 0.4) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.chairKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
+            } else if name.contains("storage") {
+                if let mat = pbr(textureKey: RoomColorManager.storageTextureKey, roughness: 0.4) {
+                    model.model?.materials = [mat]
+                } else if let color = savedColors[RoomColorManager.storageKey] {
+                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                }
             }
         }
-    }
-
-    private func applyEntityVisibilityRules() {
-        guard let root = displayedModel else { return }
-        root.visit {
-            guard let model = $0 as? ModelEntity else { return }
-            let name = model.name.lowercased()
-            if let prefix = entityPrefix(for: name) {
-                model.isEnabled = !hiddenEntityPrefixes.contains(prefix)
-            }
-        }
-    }
-
-    private func entityPrefix(for name: String) -> String? {
-        let prefixes = ["wall", "floor", "door", "window", "table", "chair", "storage"]
-        return prefixes.first(where: { name.starts(with: $0) })
     }
 
     private func fitToScreen(_ model: ModelEntity) {
@@ -1086,20 +1044,19 @@ final class RoomVisualizeVC: UIViewController {
             model.scale = furnitureScale
             
             model.generateCollisionShapes(recursive: true)
-            await MainActor.run {
-                let anchor = AnchorEntity(world: .zero)
-                anchor.addChild(model)
-                self.arView.scene.addAnchor(anchor)
 
-                self.placedFurniture.append(model)
-                
-                // If proximity mode is active, add this furniture to tracking
-                if self.isProximityModeActive {
-                    self.trackedFurnitureForProximity.append(model)
-                }
-                
-                self.selectFurniture(model, animated: false)
+            let anchor = AnchorEntity(world: .zero)
+            anchor.addChild(model)
+            arView.scene.addAnchor(anchor)
+
+            placedFurniture.append(model)
+            
+            // If proximity mode is active, add this furniture to tracking
+            if isProximityModeActive {
+                trackedFurnitureForProximity.append(model)
             }
+            
+            showControls(for: model)
         }
     }
 

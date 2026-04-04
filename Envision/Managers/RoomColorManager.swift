@@ -1,4 +1,5 @@
 import UIKit
+import RealityKit
 
 /// Manages saved colors for room elements, persisted per room URL
 final class RoomColorManager {
@@ -22,7 +23,41 @@ final class RoomColorManager {
     // Key suffix for texture names
     static let floorTextureKey = "floor_texture"
     static let wallTextureKey  = "wall_texture"
-    static let hiddenPrefixesKey = "hidden_prefixes"
+    static let doorTextureKey = "door_texture"
+    static let windowTextureKey = "window_texture"
+    static let tableTextureKey = "table_texture"
+    static let chairTextureKey = "chair_texture"
+    static let storageTextureKey = "storage_texture"
+
+    enum TextureSurfaceKind {
+        case floor
+        case wall
+        case door
+        case window
+        case table
+        case chair
+        case storage
+    }
+
+    struct TextureLibraryItem {
+        let name: String
+        let displayName: String
+        let surface: TextureSurfaceKind?
+    }
+
+    private struct BundledTextureSeed {
+        let name: String
+        let displayName: String
+        let surface: TextureSurfaceKind
+    }
+
+    private let bundledTextureSeeds: [BundledTextureSeed] = [
+        BundledTextureSeed(name: "texture-wooden-board", displayName: "Wood Floor", surface: .floor),
+        BundledTextureSeed(name: "wall-wallpaper", displayName: "Wallpaper", surface: .wall),
+    ]
+
+    private var didSeedBundledTextures = false
+    private var textureCache: [String: TextureResource] = [:]
     
     // MARK: - Public API
     
@@ -89,16 +124,6 @@ final class RoomColorManager {
         persistColors(for: roomURL)
     }
 
-    /// Remove a persisted entry for a given key from the room style payload.
-    func removeStyleValue(for key: String, roomURL: URL) {
-        let roomKey = roomURL.path
-        if colorStorage[roomKey] == nil {
-            colorStorage[roomKey] = [:]
-        }
-        colorStorage[roomKey]?.removeValue(forKey: key)
-        persistColors(for: roomURL)
-    }
-
     /// Get saved texture name for an element type, or nil if not set
     func getTextureName(for key: String, roomURL: URL) -> String? {
         let roomKey = roomURL.path
@@ -109,36 +134,144 @@ final class RoomColorManager {
         return colorStorage[roomKey]?[key]
     }
 
-    /// Persist hidden entity prefixes for a room (e.g. wall,floor,door...).
-    func saveHiddenEntityPrefixes(_ prefixes: Set<String>, roomURL: URL) {
-        let roomKey = roomURL.path
-        if colorStorage[roomKey] == nil {
-            colorStorage[roomKey] = [:]
+    // MARK: - Texture Library
+
+    /// Ensures bundled texture assets are exported to Documents/textures.
+    func ensureBundledTexturesAvailable() {
+        guard !didSeedBundledTextures else { return }
+
+        let fm = FileManager.default
+        let folderURL = texturesFolderURL()
+        do {
+            try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        } catch {
+            print("❌ Failed to create textures directory: \(error.localizedDescription)")
+            return
         }
-        if prefixes.isEmpty {
-            colorStorage[roomKey]?.removeValue(forKey: Self.hiddenPrefixesKey)
-        } else {
-            colorStorage[roomKey]?[Self.hiddenPrefixesKey] = prefixes.sorted().joined(separator: ",")
+
+        for seed in bundledTextureSeeds {
+            if textureFileURL(named: seed.name) != nil {
+                continue
+            }
+
+            guard let image = UIImage(named: seed.name) else {
+                print("⚠️ Bundled texture asset not found: \(seed.name)")
+                continue
+            }
+
+            let hasAlpha = imageHasAlpha(image)
+            let ext = hasAlpha ? "png" : "jpg"
+            let outputURL = folderURL.appendingPathComponent(seed.name).appendingPathExtension(ext)
+            let data = hasAlpha ? image.pngData() : image.jpegData(compressionQuality: 0.95)
+
+            do {
+                try data?.write(to: outputURL, options: .atomic)
+            } catch {
+                print("❌ Failed to export bundled texture \(seed.name): \(error.localizedDescription)")
+            }
         }
-        persistColors(for: roomURL)
+
+        didSeedBundledTextures = true
     }
 
-    /// Read hidden entity prefixes for a room.
-    func getHiddenEntityPrefixes(roomURL: URL) -> Set<String> {
-        let roomKey = roomURL.path
-        let raw: String? = {
-            if let value = colorStorage[roomKey]?[Self.hiddenPrefixesKey] { return value }
-            loadColors(for: roomURL)
-            return colorStorage[roomKey]?[Self.hiddenPrefixesKey]
-        }()
+    /// Returns all texture entries found in Documents/textures.
+    func availableTextureItems() -> [TextureLibraryItem] {
+        ensureBundledTexturesAvailable()
 
-        guard let raw, !raw.isEmpty else { return [] }
-        return Set(raw.split(separator: ",").map { String($0) })
+        let fm = FileManager.default
+        let folderURL = texturesFolderURL()
+        guard let urls = try? fm.contentsOfDirectory(
+            at: folderURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        let supportedExts = Set(["png", "jpg", "jpeg"])
+        let names = Set(
+            urls
+                .filter { supportedExts.contains($0.pathExtension.lowercased()) }
+                .map { $0.deletingPathExtension().lastPathComponent }
+        )
+
+        let bundledByName = Dictionary(uniqueKeysWithValues: bundledTextureSeeds.map { ($0.name, $0) })
+        let items = names.map { name -> TextureLibraryItem in
+            if let seeded = bundledByName[name] {
+                return TextureLibraryItem(name: name, displayName: seeded.displayName, surface: seeded.surface)
+            }
+
+            let lower = name.lowercased()
+            let inferredSurface: TextureSurfaceKind?
+            if lower.contains("wall") {
+                inferredSurface = .wall
+            } else if lower.contains("floor") {
+                inferredSurface = .floor
+            } else if lower.contains("door") {
+                inferredSurface = .door
+            } else if lower.contains("window") {
+                inferredSurface = .window
+            } else if lower.contains("table") {
+                inferredSurface = .table
+            } else if lower.contains("chair") {
+                inferredSurface = .chair
+            } else if lower.contains("storage") {
+                inferredSurface = .storage
+            } else {
+                inferredSurface = nil
+            }
+            return TextureLibraryItem(name: name, displayName: humanizeTextureName(name), surface: inferredSurface)
+        }
+
+        return items.sorted { lhs, rhs in
+            lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
-    /// Clear all hidden-entity persistence for the room.
-    func clearHiddenEntityPrefixes(roomURL: URL) {
-        removeStyleValue(for: Self.hiddenPrefixesKey, roomURL: roomURL)
+    /// Returns texture options for a specific surface. Items without a known surface appear in both lists.
+    func availableTextureItems(for surface: TextureSurfaceKind) -> [TextureLibraryItem] {
+        availableTextureItems().filter { item in
+            guard let itemSurface = item.surface else { return true }
+            return itemSurface == surface
+        }
+    }
+
+    /// Loads a texture resource by name from Documents/textures with fallback to bundled lookup.
+    func textureResource(named name: String) -> TextureResource? {
+        ensureBundledTexturesAvailable()
+
+        if let cached = textureCache[name] {
+            return cached
+        }
+
+        if let fileURL = textureFileURL(named: name),
+           let resource = try? TextureResource.load(contentsOf: fileURL) {
+            textureCache[name] = resource
+            return resource
+        }
+
+        if let bundled = try? TextureResource.load(named: name) {
+            textureCache[name] = bundled
+            return bundled
+        }
+
+        return nil
+    }
+
+    /// Returns a preview image for the texture name, preferring Documents/textures.
+    func texturePreviewImage(named name: String) -> UIImage? {
+        ensureBundledTexturesAvailable()
+
+        if let fileURL = textureFileURL(named: name) {
+            return UIImage(contentsOfFile: fileURL.path)
+        }
+        return UIImage(named: name)
+    }
+
+    /// Returns the full textures folder URL in Documents.
+    func texturesFolderURL() -> URL {
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsURL.appendingPathComponent("textures", isDirectory: true)
     }
 
     /// Migrate all persisted data (color JSON, thumbnail, memory cache) from the old room URL to the new one.
@@ -212,6 +345,36 @@ final class RoomColorManager {
         if let data = try? Data(contentsOf: fileURL),
            let colors = try? JSONDecoder().decode([String: String].self, from: data) {
             colorStorage[roomKey] = colors
+        }
+    }
+
+    private func textureFileURL(named name: String) -> URL? {
+        let folderURL = texturesFolderURL()
+        let fm = FileManager.default
+        for ext in ["png", "jpg", "jpeg"] {
+            let url = folderURL.appendingPathComponent(name).appendingPathExtension(ext)
+            if fm.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func humanizeTextureName(_ name: String) -> String {
+        let replaced = name
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return replaced.split(separator: " ").map { $0.capitalized }.joined(separator: " ")
+    }
+
+    private func imageHasAlpha(_ image: UIImage) -> Bool {
+        guard let alpha = image.cgImage?.alphaInfo else { return false }
+        switch alpha {
+        case .premultipliedLast, .premultipliedFirst, .last, .first:
+            return true
+        default:
+            return false
         }
     }
     
