@@ -25,6 +25,7 @@ final class TourManager {
     private let firstLaunchKey = "is_first_launch"
     private let seenTipsKey = "seen_tips"
     private let tourSkippedKey = "tour_skipped"
+    private let roomToFurnitureHandoffShownKey = "room_to_furniture_handoff_shown"
     
     // MARK: - Public Properties
     
@@ -74,6 +75,12 @@ final class TourManager {
         get { !userDefaults.bool(forKey: firstLaunchKey) }
         set { userDefaults.set(!newValue, forKey: firstLaunchKey) }
     }
+
+    /// Whether the room-tour completion handoff to furniture tab has already been shown.
+    var roomToFurnitureHandoffShown: Bool {
+        get { userDefaults.bool(forKey: roomToFurnitureHandoffShownKey) }
+        set { userDefaults.set(newValue, forKey: roomToFurnitureHandoffShownKey) }
+    }
     
     // MARK: - Initialization
     
@@ -108,6 +115,7 @@ final class TourManager {
         currentTourStep = 0
         isTourCompleted = false
         tourSkipped = false
+        roomToFurnitureHandoffShown = false
         hasSeenWelcome = true
         isFirstLaunch = false
         print("🎬 Tour started")
@@ -129,6 +137,7 @@ final class TourManager {
         currentTourStep = 0
         hasSeenWelcome = false
         tourSkipped = false
+        roomToFurnitureHandoffShown = false
         seenTips = []
         print("🔄 Tour reset complete")
     }

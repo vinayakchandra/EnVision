@@ -18,6 +18,7 @@
 		29EE7D002F72FF5800C6FEE0 /* FirebaseStorageCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 29EE7CFF2F72FF5800C6FEE0 /* FirebaseStorageCombine-Community */; };
 		29EE7D032F72FFF900C6FEE0 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 29EE7D022F72FFF900C6FEE0 /* GoogleSignIn */; };
 		29EE7D052F72FFF900C6FEE0 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 29EE7D042F72FFF900C6FEE0 /* GoogleSignInSwift */; };
+		31AA00012F90000100C6FEE0 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 31AA00032F90000100C6FEE0 /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +51,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				31AA00012F90000100C6FEE0 /* Lottie in Frameworks */,
 				29EE7CFA2F72FF5800C6FEE0 /* FirebaseDatabase in Frameworks */,
 				29EE7CFC2F72FF5800C6FEE0 /* FirebaseFunctions in Frameworks */,
 				29EE7CF02F72FF5800C6FEE0 /* FirebaseAnalytics in Frameworks */,
@@ -103,6 +105,7 @@
 			);
 			name = Envision;
 			packageProductDependencies = (
+				31AA00032F90000100C6FEE0 /* Lottie */,
 				29EE7CEF2F72FF5800C6FEE0 /* FirebaseAnalytics */,
 				29EE7CF12F72FF5800C6FEE0 /* FirebaseAnalyticsCore */,
 				29EE7CF32F72FF5800C6FEE0 /* FirebaseAuth */,
@@ -144,6 +147,7 @@
 			mainGroup = 2952BE892EC1395900797168;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				31AA00022F90000100C6FEE0 /* XCRemoteSwiftPackageReference "lottie-spm" */,
 				29EE7CEE2F72FF5800C6FEE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				29EE7D012F72FFF900C6FEE0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
@@ -409,6 +413,14 @@
 				minimumVersion = 9.1.0;
 			};
 		};
+		31AA00022F90000100C6FEE0 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -466,6 +478,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 29EE7D012F72FFF900C6FEE0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
+		};
+		31AA00032F90000100C6FEE0 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 31AA00022F90000100C6FEE0 /* XCRemoteSwiftPackageReference "lottie-spm" */;
+			productName = Lottie;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

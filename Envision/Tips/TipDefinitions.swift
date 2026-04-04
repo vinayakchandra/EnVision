@@ -283,6 +283,30 @@ enum AppTips {
         profileSupport.id,
     ]
 
+    static let roomTourTipIDs: [String] = [
+        roomsIntro.id,
+        roomScanSlowly.id,
+        roomImport.id,
+        roomActions.id,
+        roomLongPress.id,
+        roomCategories.id,
+        roomSearch.id,
+        roomDetail.id,
+        roomARPreview.id,
+    ]
+
+    static let furnitureTourTipIDs: [String] = [
+        furnitureIntro.id,
+        furnitureAutomaticCapture.id,
+        furniturePhotoCount.id,
+        furnitureQuality.id,
+        furnitureLighting.id,
+        furnitureCoverage.id,
+        furnitureFromPhotos.id,
+        furnitureImportUSDZ.id,
+        furnitureCategories.id,
+    ]
+
     /// Tips that define completion of the core onboarding journey.
     /// Data-shape-dependent tips (e.g. empty library states) are intentionally excluded.
     static let completionTipIDs: [String] = [

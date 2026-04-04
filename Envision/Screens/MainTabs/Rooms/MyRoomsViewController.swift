@@ -21,6 +21,10 @@ final class MyRoomsViewController: UIViewController {
     var previewURL: URL!
     private var emptyStateView: UIView!
     private var tipContainerBottomConstraint: NSLayoutConstraint?
+    private var displayedTipID: String?
+    private var scanBarButtonItem: UIBarButtonItem?
+    private var importBarButtonItem: UIBarButtonItem?
+    private var actionsBarButtonItem: UIBarButtonItem?
 
     // MARK: - Data
     var roomFiles: [URL] = []
@@ -134,6 +138,7 @@ final class MyRoomsViewController: UIViewController {
         super.viewWillDisappear(animated)
         TipCoordinator.shared.dismissTip(from: tipContainerView)
         updateCollectionInsetsForTip(height: 0)
+        displayedTipID = nil
     }
 
     private func setupUI() {
@@ -157,12 +162,16 @@ final class MyRoomsViewController: UIViewController {
         let importButton = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"), style: .plain, target: self, action: #selector(importTapped))
         importButton.tintColor = .systemBlue
 
+        scanBarButtonItem = scanButton
+        importBarButtonItem = importButton
         navigationItem.rightBarButtonItems = [
             scanButton,
             importButton
         ]
 
-        navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: makeMenu())
+        let actionsButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: makeMenu())
+        actionsBarButtonItem = actionsButton
+        navigationItem.leftBarButtonItem = actionsButton
     }
 
     private func makeMenu() -> UIMenu {
@@ -812,60 +821,76 @@ final class MyRoomsViewController: UIViewController {
 
     private func showContextualTips() {
         guard isViewLoaded, view.window != nil else { return }
+        guard TourManager.shared.hasSeen(tipID: AppTips.welcome.id) else { return }
+        guard !TourManager.shared.tourSkipped, !TourManager.shared.hasCompletedTour else { return }
+
+        if isSelectionMode {
+            TipCoordinator.shared.dismissTip(from: tipContainerView)
+            updateCollectionInsetsForTip(height: 0)
+            displayedTipID = nil
+            return
+        }
+
+        let activeTipSequence = activeRoomTipSequence()
+        guard let tip = firstUnseen(from: activeTipSequence) else {
+            TipCoordinator.shared.dismissTip(from: tipContainerView)
+            updateCollectionInsetsForTip(height: 0)
+            displayedTipID = nil
+            if !TourManager.shared.roomToFurnitureHandoffShown {
+                TourManager.shared.roomToFurnitureHandoffShown = true
+                NotificationCenter.default.post(name: .roomTourDidComplete, object: nil)
+            }
+            return
+        }
+
+        if displayedTipID == tip.id, tipContainerView.subviews.contains(where: { $0 is TipBubbleView }) {
+            return
+        }
 
         TipCoordinator.shared.dismissTip(from: tipContainerView)
         updateCollectionInsetsForTip(height: 0)
+        displayedTipID = nil
 
-        if isSelectionMode {
-            return
-        }
+        showTip(tip, in: activeTipSequence) {}
+    }
 
+    private func activeRoomTipSequence() -> [TipDefinition] {
         if roomFiles.isEmpty {
-            if let tip = firstUnseen(from: [AppTips.roomsIntro, AppTips.roomScanSlowly]) {
-                showTip(tip) { [weak self] in
-                    self?.scanTapped()
-                }
-            }
-            return
+            return [AppTips.roomsIntro, AppTips.roomScanSlowly]
         }
-
         if roomFiles.count == 1 {
-            if let tip = firstUnseen(from: [AppTips.roomImport, AppTips.roomActions, AppTips.roomLongPress]) {
-                showTip(tip) { [weak self] in
-                    if tip.id == AppTips.roomImport.id {
-                        self?.importTapped()
-                    }
-                }
-            }
-            return
+            return [AppTips.roomImport, AppTips.roomActions, AppTips.roomLongPress]
         }
-
-        if let tip = firstUnseen(from: [
+        return [
             AppTips.roomLongPress,
             AppTips.roomCategories,
             AppTips.roomSearch,
             AppTips.roomDetail,
             AppTips.roomARPreview,
-        ]) {
-            showTip(tip) {}
-        }
+        ]
     }
 
     private func firstUnseen(from tips: [TipDefinition]) -> TipDefinition? {
         tips.first { !TourManager.shared.hasSeen(tipID: $0.id) }
     }
 
-    private func showTip(_ tip: TipDefinition, action: @escaping () -> Void) {
+    private func showTip(_ tip: TipDefinition, in sequence: [TipDefinition], action: @escaping () -> Void) {
         tipContainerBottomConstraint?.isActive = false
         tipContainerBottomConstraint = nil
+
+        let stepIndex = (sequence.firstIndex(where: { $0.id == tip.id }) ?? 0) + 1
+        let stepCount = max(1, sequence.count)
+        let isLastStep = stepIndex == stepCount
+        let placement = placementForTip(tip)
 
         let configuration = TipBubbleView.Configuration(
             title: tip.title,
             message: tip.message,
-            primaryActionTitle: tip.primaryActionTitle,
-            dismissActionTitle: tip.dismissActionTitle,
-            arrowEdge: tip.arrowEdge,
-            arrowOffset: tip.arrowOffset
+            primaryActionTitle: isLastStep ? "Done" : "Next",
+            dismissActionTitle: "Skip",
+            progressText: "\(stepIndex)/\(stepCount)",
+            arrowEdge: placement.edge,
+            arrowOffset: placement.offset
         )
 
         TipCoordinator.shared.showTip(
@@ -875,13 +900,81 @@ final class MyRoomsViewController: UIViewController {
             containerView: tipContainerView,
             onPrimaryAction: action,
             onDismiss: { [weak self] in
+                self?.displayedTipID = nil
                 self?.updateCollectionInsetsForTip(height: 0)
                 self?.reestablishZeroHeightConstraint()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    self?.showContextualTips()
+                }
             },
             onPresented: { [weak self] height in
+                self?.displayedTipID = tip.id
                 self?.updateCollectionInsetsForTip(height: height + 10)
             }
         )
+    }
+
+    private struct TipPlacement {
+        let edge: TipBubbleView.ArrowEdge
+        let offset: CGFloat
+    }
+
+    private func placementForTip(_ tip: TipDefinition) -> TipPlacement {
+        switch tip.id {
+        case AppTips.roomsIntro.id, AppTips.roomScanSlowly.id:
+            return placement(pointingTo: viewForRightBarButton(at: 0), edge: .top)
+        case AppTips.roomImport.id:
+            return placement(pointingTo: viewForRightBarButton(at: 1), edge: .top)
+        case AppTips.roomActions.id:
+            return placement(pointingTo: viewForLeftBarButton(), edge: .top)
+        case AppTips.roomCategories.id:
+            return placement(pointingTo: firstChipCell(), edge: .bottom)
+        case AppTips.roomSearch.id:
+            return placement(pointingTo: navigationItem.searchController?.searchBar, edge: .top)
+        case AppTips.roomLongPress.id, AppTips.roomDetail.id, AppTips.roomARPreview.id:
+            return placement(pointingTo: firstRoomCell(), edge: .bottom)
+        default:
+            return TipPlacement(edge: .bottom, offset: 0)
+        }
+    }
+
+    private func placement(pointingTo targetView: UIView?, edge: TipBubbleView.ArrowEdge) -> TipPlacement {
+        guard let targetView else { return TipPlacement(edge: edge, offset: 0) }
+        tipContainerView.layoutIfNeeded()
+        let targetCenterInContainer = tipContainerView.convert(
+            CGPoint(x: targetView.bounds.midX, y: targetView.bounds.midY),
+            from: targetView
+        )
+        let offset = targetCenterInContainer.x - (tipContainerView.bounds.width / 2)
+        return TipPlacement(edge: edge, offset: offset)
+    }
+
+    private func viewForRightBarButton(at index: Int) -> UIView? {
+        switch index {
+        case 0:
+            return scanBarButtonItem?.value(forKey: "view") as? UIView
+        case 1:
+            return importBarButtonItem?.value(forKey: "view") as? UIView
+        default:
+            return nil
+        }
+    }
+
+    private func viewForLeftBarButton() -> UIView? {
+        actionsBarButtonItem?.value(forKey: "view") as? UIView
+    }
+
+    private func firstChipCell() -> UIView? {
+        collectionView.cellForItem(at: IndexPath(item: 0, section: 0))
+    }
+
+    private func firstRoomCell() -> UIView? {
+        let firstVisibleRoom = collectionView.indexPathsForVisibleItems
+            .filter { $0.section == 1 }
+            .sorted()
+            .first
+        guard let firstVisibleRoom else { return nil }
+        return collectionView.cellForItem(at: firstVisibleRoom)
     }
 
     private func reestablishZeroHeightConstraint() {

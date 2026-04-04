@@ -9,13 +9,6 @@ import FirebaseAuth
 class ProfileViewController: UIViewController {
 
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
-    private let tipContainerView: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.backgroundColor = .clear
-        return view
-    }()
-    private var tipContainerBottomConstraint: NSLayoutConstraint?
 
     // MARK: - Profile Components
     private let profileHeaderView = UIView()
@@ -78,32 +71,18 @@ class ProfileViewController: UIViewController {
         setupTable()
         setupProfileHeader()
         setupFooter()
-        setupTipContainer()
         tableView.tableHeaderView = profileHeaderView
         NotificationCenter.default.addObserver(self, selector: #selector(handleProfileDidUpdate), name: .profileDidUpdate, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleTourDidStart), name: .tourDidStart, object: nil)
         refreshProfileHeader()
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self, name: .profileDidUpdate, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .tourDidStart, object: nil)
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         refreshProfileHeader()
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        showContextualTips()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        TipCoordinator.shared.dismissTip(from: tipContainerView)
-        updateTableInsetsForTip(height: 0)
     }
 
     // MARK: - Table Setup
@@ -121,104 +100,6 @@ class ProfileViewController: UIViewController {
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
-    }
-
-    private func setupTipContainer() {
-        view.addSubview(tipContainerView)
-        NSLayoutConstraint.activate([
-            tipContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            tipContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            tipContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
-        ])
-
-        tipContainerBottomConstraint?.isActive = false
-        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
-        tipContainerBottomConstraint?.priority = .required
-        tipContainerBottomConstraint?.isActive = true
-    }
-
-    private func showContextualTips() {
-        guard isViewLoaded, view.window != nil else { return }
-
-        TipCoordinator.shared.dismissTip(from: tipContainerView)
-
-        let orderedTips: [TipDefinition] = [
-            AppTips.profileIntro,
-            AppTips.profileSettings,
-            AppTips.profileTheme,
-            AppTips.profileNotifications,
-            AppTips.profileTipsLibrary,
-            AppTips.profileRestartTour,
-            AppTips.profileExportData,
-            AppTips.profileSupport
-        ]
-
-        if let tip = orderedTips.first(where: { !TourManager.shared.hasSeen(tipID: $0.id) }) {
-            showTip(tip) { [weak self] in
-                guard let self else { return }
-                switch tip.id {
-                case AppTips.profileSettings.id, AppTips.profileTheme.id:
-                    self.navigationController?.pushViewController(AppearanceViewController(), animated: true)
-                case AppTips.profileTipsLibrary.id:
-                    self.navigationController?.pushViewController(TipsLibraryViewController(), animated: true)
-                case AppTips.profileRestartTour.id:
-                    TourManager.shared.resetTour()
-                    // Pop back to root so the welcome tip re-fires in MainTabBarController
-                    self.navigationController?.popToRootViewController(animated: true)
-                default:
-                    break
-                }
-            }
-            return
-        }
-
-        if !TourManager.shared.hasCompletedTour && AppTips.completionTipIDs.allSatisfy({ TourManager.shared.hasSeen(tipID: $0) }) {
-            TourManager.shared.completeTour()
-        }
-    }
-
-    private func showTip(_ tip: TipDefinition, action: @escaping () -> Void) {
-        tipContainerBottomConstraint?.isActive = false
-        tipContainerBottomConstraint = nil
-
-        let config = TipBubbleView.Configuration(
-            title: tip.title,
-            message: tip.message,
-            primaryActionTitle: tip.primaryActionTitle,
-            dismissActionTitle: tip.dismissActionTitle,
-            arrowEdge: tip.arrowEdge,
-            arrowOffset: tip.arrowOffset
-        )
-
-        TipCoordinator.shared.showTip(
-            id: tip.id,
-            configuration: config,
-            in: self,
-            containerView: tipContainerView,
-            onPrimaryAction: action,
-            onDismiss: { [weak self] in
-                self?.updateTableInsetsForTip(height: 0)
-                self?.reestablishZeroHeightConstraint()
-            },
-            onPresented: { [weak self] height in
-                self?.updateTableInsetsForTip(height: height + 10)
-            }
-        )
-    }
-
-    private func updateTableInsetsForTip(height: CGFloat) {
-        var inset = tableView.contentInset
-        guard abs(inset.top - height) > 0.5 else { return }
-        inset.top = max(0, height)
-        tableView.contentInset = inset
-        tableView.scrollIndicatorInsets = inset
-    }
-
-    private func reestablishZeroHeightConstraint() {
-        guard tipContainerBottomConstraint == nil else { return }
-        tipContainerBottomConstraint = tipContainerView.bottomAnchor.constraint(equalTo: tipContainerView.topAnchor)
-        tipContainerBottomConstraint?.priority = .required
-        tipContainerBottomConstraint?.isActive = true
     }
 
     // MARK: - Profile Header Setup
@@ -346,10 +227,6 @@ class ProfileViewController: UIViewController {
     @objc private func handleProfileDidUpdate() {
         refreshProfileHeader()
         tableView.reloadData()
-    }
-
-    @objc private func handleTourDidStart() {
-        showContextualTips()
     }
 
     // Logout

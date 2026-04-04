@@ -9,6 +9,7 @@ final class TipBubbleView: UIView {
         let message: String
         let primaryActionTitle: String
         let dismissActionTitle: String
+        let progressText: String?
         let arrowEdge: ArrowEdge
         let arrowOffset: CGFloat
     }
@@ -40,6 +41,16 @@ final class TipBubbleView: UIView {
         lbl.translatesAutoresizingMaskIntoConstraints = false
         lbl.font = .systemFont(ofSize: 15, weight: .semibold)
         lbl.textColor = .white
+        lbl.numberOfLines = 1
+        return lbl
+    }()
+
+    private let progressLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        lbl.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        lbl.textColor = UIColor.white.withAlphaComponent(0.78)
+        lbl.textAlignment = .right
         lbl.numberOfLines = 1
         return lbl
     }()
@@ -97,6 +108,8 @@ final class TipBubbleView: UIView {
         messageLabel.text = config.message
         primaryButton.setTitle(config.primaryActionTitle, for: .normal)
         dismissButton.setTitle(config.dismissActionTitle, for: .normal)
+        progressLabel.text = config.progressText
+        progressLabel.isHidden = (config.progressText?.isEmpty ?? true)
 
         primaryButton.addTarget(self, action: #selector(primaryTapped), for: .touchUpInside)
         dismissButton.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
@@ -109,6 +122,7 @@ final class TipBubbleView: UIView {
         addSubview(blurView)
         blurView.contentView.addSubview(tintOverlay)
         blurView.contentView.addSubview(titleLabel)
+        blurView.contentView.addSubview(progressLabel)
         blurView.contentView.addSubview(messageLabel)
         blurView.contentView.addSubview(primaryButton)
         blurView.contentView.addSubview(dismissButton)
@@ -131,7 +145,11 @@ final class TipBubbleView: UIView {
 
             titleLabel.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 14),
             titleLabel.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 16),
-            titleLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -16),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: progressLabel.leadingAnchor, constant: -8),
+
+            progressLabel.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            progressLabel.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -16),
+            progressLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.leadingAnchor, constant: 16),
 
             messageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
             messageLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
