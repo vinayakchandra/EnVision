@@ -26,6 +26,9 @@ final class ScanFurnitureViewController: UIViewController {
         return view
     }()
     private var tipContainerBottomConstraint: NSLayoutConstraint?
+    private var displayedTipID: String?
+    private var scanBarButtonItem: UIBarButtonItem?
+    private var importBarButtonItem: UIBarButtonItem?
 
     private let searchController = UISearchController(searchResultsController: nil)
 
@@ -129,13 +132,24 @@ final class ScanFurnitureViewController: UIViewController {
             name: .tourDidStart,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleFurnitureTourShouldStart),
+            name: .furnitureTourShouldStart,
+            object: nil
+        )
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self, name: .tourDidStart, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .furnitureTourShouldStart, object: nil)
     }
 
     @objc private func handleTourDidStart() {
+        showContextualTips()
+    }
+
+    @objc private func handleFurnitureTourShouldStart() {
         showContextualTips()
     }
 
@@ -157,6 +171,7 @@ final class ScanFurnitureViewController: UIViewController {
         super.viewWillDisappear(animated)
         TipCoordinator.shared.dismissTip(from: tipContainerView)
         updateCollectionInsetsForTip(height: 0)
+        displayedTipID = nil
     }
 
     private func setupRefreshControl() {
@@ -198,6 +213,8 @@ final class ScanFurnitureViewController: UIViewController {
         )
         importBtn.tintColor = .systemBlue
 
+        scanBarButtonItem = scanBtn
+        importBarButtonItem = importBtn
         navigationItem.rightBarButtonItems = [scanBtn, importBtn]
 
         // Left button: Edit menu
@@ -772,62 +789,75 @@ final class ScanFurnitureViewController: UIViewController {
 
     private func showContextualTips() {
         guard isViewLoaded, view.window != nil else { return }
+        guard TourManager.shared.hasSeen(tipID: AppTips.welcome.id) else { return }
+        guard !TourManager.shared.tourSkipped, !TourManager.shared.hasCompletedTour else { return }
 
-        TipCoordinator.shared.dismissTip(from: tipContainerView)
+        let activeTipSequence = activeFurnitureTipSequence()
 
         if collectionView.allowsMultipleSelection {
+            TipCoordinator.shared.dismissTip(from: tipContainerView)
+            updateCollectionInsetsForTip(height: 0)
+            displayedTipID = nil
             return
         }
 
+        guard let tip = firstUnseen(from: activeTipSequence) else {
+            TipCoordinator.shared.dismissTip(from: tipContainerView)
+            updateCollectionInsetsForTip(height: 0)
+            displayedTipID = nil
+            return
+        }
+
+        if displayedTipID == tip.id, tipContainerView.subviews.contains(where: { $0 is TipBubbleView }) {
+            return
+        }
+
+        TipCoordinator.shared.dismissTip(from: tipContainerView)
+        updateCollectionInsetsForTip(height: 0)
+        displayedTipID = nil
+
+        showTip(tip, in: activeTipSequence) {}
+    }
+
+    private func activeFurnitureTipSequence() -> [TipDefinition] {
         if furnitureFiles.isEmpty {
-            if let tip = firstUnseen(from: [
+            return [
                 AppTips.furnitureIntro,
                 AppTips.furnitureAutomaticCapture,
                 AppTips.furnitureFromPhotos,
                 AppTips.furnitureImportUSDZ
-            ]) {
-                showTip(tip) { [weak self] in
-                    switch tip.id {
-                    case AppTips.furnitureIntro.id, AppTips.furnitureAutomaticCapture.id:
-                        self?.automaticCaptureTapped()
-                    case AppTips.furnitureFromPhotos.id:
-                        self?.createFromPhotosTapped()
-                    case AppTips.furnitureImportUSDZ.id:
-                        self?.importUSDZTapped()
-                    default:
-                        break
-                    }
-                }
-            }
-            return
+            ]
         }
-
-        if let tip = firstUnseen(from: [
+        return [
             AppTips.furnitureQuality,
             AppTips.furniturePhotoCount,
             AppTips.furnitureLighting,
             AppTips.furnitureCoverage,
             AppTips.furnitureCategories
-        ]) {
-            showTip(tip) {}
-        }
+        ]
     }
 
     private func firstUnseen(from tips: [TipDefinition]) -> TipDefinition? {
         tips.first { !TourManager.shared.hasSeen(tipID: $0.id) }
     }
 
-    private func showTip(_ tip: TipDefinition, action: @escaping () -> Void) {
+    private func showTip(_ tip: TipDefinition, in sequence: [TipDefinition], action: @escaping () -> Void) {
         tipContainerBottomConstraint?.isActive = false
         tipContainerBottomConstraint = nil
+
+        let stepIndex = (sequence.firstIndex(where: { $0.id == tip.id }) ?? 0) + 1
+        let stepCount = max(1, sequence.count)
+        let isLastStep = stepIndex == stepCount
+        let placement = placementForTip(tip)
 
         let config = TipBubbleView.Configuration(
             title: tip.title,
             message: tip.message,
-            primaryActionTitle: tip.primaryActionTitle,
-            dismissActionTitle: tip.dismissActionTitle,
-            arrowEdge: tip.arrowEdge,
-            arrowOffset: tip.arrowOffset
+            primaryActionTitle: isLastStep ? "Done" : "Next",
+            dismissActionTitle: "Skip",
+            progressText: "\(stepIndex)/\(stepCount)",
+            arrowEdge: placement.edge,
+            arrowOffset: placement.offset
         )
 
         TipCoordinator.shared.showTip(
@@ -837,13 +867,75 @@ final class ScanFurnitureViewController: UIViewController {
             containerView: tipContainerView,
             onPrimaryAction: action,
             onDismiss: { [weak self] in
+                self?.displayedTipID = nil
                 self?.updateCollectionInsetsForTip(height: 0)
                 self?.reestablishZeroHeightConstraint()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    self?.showContextualTips()
+                }
             },
             onPresented: { [weak self] height in
+                self?.displayedTipID = tip.id
                 self?.updateCollectionInsetsForTip(height: height + 10)
             }
         )
+    }
+
+    private struct TipPlacement {
+        let edge: TipBubbleView.ArrowEdge
+        let offset: CGFloat
+    }
+
+    private func placementForTip(_ tip: TipDefinition) -> TipPlacement {
+        switch tip.id {
+        case AppTips.furnitureIntro.id, AppTips.furnitureAutomaticCapture.id:
+            return placement(pointingTo: viewForRightBarButton(at: 0), edge: .top)
+        case AppTips.furnitureImportUSDZ.id:
+            return placement(pointingTo: viewForRightBarButton(at: 1), edge: .top)
+        case AppTips.furnitureFromPhotos.id:
+            return placement(pointingTo: viewForRightBarButton(at: 0), edge: .top)
+        case AppTips.furnitureCategories.id:
+            return placement(pointingTo: firstChipCell(), edge: .bottom)
+        case AppTips.furnitureQuality.id, AppTips.furniturePhotoCount.id, AppTips.furnitureLighting.id, AppTips.furnitureCoverage.id:
+            return placement(pointingTo: firstFurnitureCell(), edge: .bottom)
+        default:
+            return TipPlacement(edge: .bottom, offset: 0)
+        }
+    }
+
+    private func placement(pointingTo targetView: UIView?, edge: TipBubbleView.ArrowEdge) -> TipPlacement {
+        guard let targetView else { return TipPlacement(edge: edge, offset: 0) }
+        tipContainerView.layoutIfNeeded()
+        let targetCenterInContainer = tipContainerView.convert(
+            CGPoint(x: targetView.bounds.midX, y: targetView.bounds.midY),
+            from: targetView
+        )
+        let offset = targetCenterInContainer.x - (tipContainerView.bounds.width / 2)
+        return TipPlacement(edge: edge, offset: offset)
+    }
+
+    private func viewForRightBarButton(at index: Int) -> UIView? {
+        switch index {
+        case 0:
+            return scanBarButtonItem?.value(forKey: "view") as? UIView
+        case 1:
+            return importBarButtonItem?.value(forKey: "view") as? UIView
+        default:
+            return nil
+        }
+    }
+
+    private func firstChipCell() -> UIView? {
+        collectionView.cellForItem(at: IndexPath(item: 0, section: 0))
+    }
+
+    private func firstFurnitureCell() -> UIView? {
+        let firstVisibleFurniture = collectionView.indexPathsForVisibleItems
+            .filter { $0.section == 1 }
+            .sorted()
+            .first
+        guard let firstVisibleFurniture else { return nil }
+        return collectionView.cellForItem(at: firstVisibleFurniture)
     }
 
     private func reestablishZeroHeightConstraint() {

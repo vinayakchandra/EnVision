@@ -23,15 +23,17 @@ final class TipCoordinator {
 
         tipView.onPrimaryAction = { [weak self] in
             self?.markAsSeen(tipID: id)
-            self?.dismissTip(from: containerView)
-            onPrimaryAction()
-            onDismiss?()
+            self?.dismissTip(from: containerView) {
+                onPrimaryAction()
+                onDismiss?()
+            }
         }
 
         tipView.onDismiss = { [weak self] in
             self?.markAsSeen(tipID: id)
-            self?.dismissTip(from: containerView)
-            onDismiss?()
+            self?.dismissTip(from: containerView) {
+                onDismiss?()
+            }
         }
 
         containerView.addSubview(tipView)
@@ -60,12 +62,16 @@ final class TipCoordinator {
         }
     }
 
-    func dismissTip(from containerView: UIView) {
-        guard let tipView = containerView.subviews.first(where: { $0 is TipBubbleView }) else { return }
+    func dismissTip(from containerView: UIView, completion: (() -> Void)? = nil) {
+        guard let tipView = containerView.subviews.first(where: { $0 is TipBubbleView }) else {
+            completion?()
+            return
+        }
         UIView.animate(withDuration: 0.2, animations: {
             tipView.alpha = 0
         }) { _ in
             tipView.removeFromSuperview()
+            completion?()
         }
     }
 

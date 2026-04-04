@@ -4,19 +4,37 @@
 //
 
 import UIKit
+import Lottie
 
 final class OnboardingPage: UIViewController {
 
+    enum Visual {
+        case systemImage(String)
+        case lottie(String)
+    }
+
     // MARK: - Data
 
-    private let iconName: String
+    private let visual: Visual
+    private let fallbackSystemImage: String
     private let titleText: String
     private let subtitleText: String
+    private var activeAnimationView: LottieAnimationView?
+    private var iconWrapperSizeConstraint: NSLayoutConstraint?
 
     init(title: String, subtitle: String, systemImage: String) {
         self.titleText = title
         self.subtitleText = subtitle
-        self.iconName = systemImage
+        self.visual = .systemImage(systemImage)
+        self.fallbackSystemImage = systemImage
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    init(title: String, subtitle: String, lottieName: String, fallbackSystemImage: String) {
+        self.titleText = title
+        self.subtitleText = subtitle
+        self.visual = .lottie(lottieName)
+        self.fallbackSystemImage = fallbackSystemImage
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -69,33 +87,45 @@ final class OnboardingPage: UIViewController {
         setupViews()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        activeAnimationView?.play()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        activeAnimationView?.stop()
+    }
+
     // MARK: - Layout
 
     private func setupViews() {
         iconWrapper.backgroundColor = AppColors.accent.withAlphaComponent(0.1)
-
-        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 36, weight: .medium)
-        iconView.image = UIImage(systemName: iconName, withConfiguration: symbolConfig)
-        iconView.tintColor = AppColors.accent
+        configureVisual()
 
         titleLabel.text = titleText
         subtitleLabel.text = subtitleText
 
-        iconWrapper.addSubview(iconView)
         view.addSubview(iconWrapper)
         view.addSubview(titleLabel)
         view.addSubview(subtitleLabel)
 
+        let iconSize: CGFloat = {
+            switch visual {
+            case .lottie:
+                return 240
+            case .systemImage:
+                return 100
+            }
+        }()
+
+        iconWrapperSizeConstraint = iconWrapper.widthAnchor.constraint(equalToConstant: iconSize)
+
         NSLayoutConstraint.activate([
             iconWrapper.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             iconWrapper.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -80),
-            iconWrapper.widthAnchor.constraint(equalToConstant: 100),
-            iconWrapper.heightAnchor.constraint(equalToConstant: 100),
-
-            iconView.centerXAnchor.constraint(equalTo: iconWrapper.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: iconWrapper.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 44),
-            iconView.heightAnchor.constraint(equalToConstant: 44),
+            iconWrapperSizeConstraint!,
+            iconWrapper.heightAnchor.constraint(equalTo: iconWrapper.widthAnchor),
 
             titleLabel.topAnchor.constraint(equalTo: iconWrapper.bottomAnchor, constant: 32),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
@@ -104,6 +134,53 @@ final class OnboardingPage: UIViewController {
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
             subtitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
+        ])
+    }
+
+    private func configureVisual() {
+        switch visual {
+        case let .systemImage(iconName):
+            applySystemImage(iconName)
+        case let .lottie(lottieName):
+            applyLottie(lottieName)
+        }
+    }
+
+    private func applySystemImage(_ iconName: String) {
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 36, weight: .medium)
+        iconView.image = UIImage(systemName: iconName, withConfiguration: symbolConfig)
+        iconView.tintColor = AppColors.accent
+
+        iconWrapper.addSubview(iconView)
+        NSLayoutConstraint.activate([
+            iconView.centerXAnchor.constraint(equalTo: iconWrapper.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: iconWrapper.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 44),
+            iconView.heightAnchor.constraint(equalToConstant: 44),
+        ])
+    }
+
+    private func applyLottie(_ lottieName: String) {
+        guard LottieAnimation.named(lottieName) != nil else {
+            applySystemImage(fallbackSystemImage)
+            return
+        }
+
+        iconWrapper.backgroundColor = .clear
+
+        let animationView = LottieAnimationView(name: lottieName)
+        animationView.translatesAutoresizingMaskIntoConstraints = false
+        animationView.contentMode = .scaleAspectFit
+        animationView.loopMode = .loop
+        animationView.backgroundBehavior = .pauseAndRestore
+        activeAnimationView = animationView
+
+        iconWrapper.addSubview(animationView)
+        NSLayoutConstraint.activate([
+            animationView.topAnchor.constraint(equalTo: iconWrapper.topAnchor),
+            animationView.leadingAnchor.constraint(equalTo: iconWrapper.leadingAnchor),
+            animationView.trailingAnchor.constraint(equalTo: iconWrapper.trailingAnchor),
+            animationView.bottomAnchor.constraint(equalTo: iconWrapper.bottomAnchor),
         ])
     }
 
