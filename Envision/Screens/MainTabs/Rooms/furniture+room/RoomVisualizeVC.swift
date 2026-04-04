@@ -10,6 +10,7 @@ final class RoomVisualizeVC: UIViewController {
     private var roomModel: ModelEntity?
     private var displayedModel: ModelEntity?
     private var placedFurniture: [ModelEntity] = []
+    private var selectedFurniture: ModelEntity?
     private var isMeasuringMode = false
     private var measurementPoints: [SIMD3<Float>] = []
     private var measurementLabel: UILabel?
@@ -27,6 +28,7 @@ final class RoomVisualizeVC: UIViewController {
     private var proximityUpdateTimer: Timer?
     private var isProximityModeActive = false
     private var trackedFurnitureForProximity: [ModelEntity] = []
+    private var furnitureSelectionTapGesture: UITapGestureRecognizer?
     
     private enum MeasurementModeType {
         case pointToPoint    // Original: tap two points
@@ -242,21 +244,17 @@ final class RoomVisualizeVC: UIViewController {
     private func showMeasurementOptions() {
         let alert = UIAlertController(title: "Measurement Mode", message: "Choose what to measure", preferredStyle: .actionSheet)
         
-        alert.addAction(UIAlertAction(title: "📏 Point to Point", style: .default) { [weak self] _ in
-            self?.enterMeasurementMode(type: .pointToPoint)
-        })
-        
-        alert.addAction(UIAlertAction(title: "📦 Room Dimensions", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Room Dimensions", style: .default) { [weak self] _ in
             self?.enterMeasurementMode(type: .room)
         })
         
         if !placedFurniture.isEmpty {
-            alert.addAction(UIAlertAction(title: "🪑 Furniture Dimensions", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "Furniture Dimensions", style: .default) { [weak self] _ in
                 self?.enterMeasurementMode(type: .furniture)
             })
             
             // NEW: Proximity measurement option
-            alert.addAction(UIAlertAction(title: "📐 Furniture Proximity (Auto)", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "Furniture Proximity (Auto)", style: .default) { [weak self] _ in
                 self?.enterMeasurementMode(type: .proximity)
             })
         }
@@ -874,6 +872,56 @@ final class RoomVisualizeVC: UIViewController {
     private func setupGestures() {
         arView.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handlePan)))
         arView.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(handlePinch)))
+        setupFurnitureSelectionTapGesture()
+    }
+
+    private func setupFurnitureSelectionTapGesture() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleFurnitureSelectionTap(_:)))
+        tap.cancelsTouchesInView = false
+        arView.addGestureRecognizer(tap)
+        furnitureSelectionTapGesture = tap
+    }
+
+    @objc private func handleFurnitureSelectionTap(_ gesture: UITapGestureRecognizer) {
+        guard !isMeasuringMode else { return }
+        let location = gesture.location(in: arView)
+        guard let furniture = resolveFurniture(at: location) else { return }
+        selectFurniture(furniture, animated: true)
+    }
+
+    private func resolveFurniture(at location: CGPoint) -> ModelEntity? {
+        // Preferred: direct hit-test to tapped entity.
+        if let tappedEntity = arView.entity(at: location) {
+            for furniture in placedFurniture where tappedEntity == furniture || isDescendant(tappedEntity, of: furniture) {
+                return furniture
+            }
+        }
+
+        // Fallback: choose nearest furniture in screen space.
+        let nearest = placedFurniture.min { lhs, rhs in
+            let lhs2D = arView.project(lhs.position(relativeTo: nil)) ?? .zero
+            let rhs2D = arView.project(rhs.position(relativeTo: nil)) ?? .zero
+            let lhsDist = hypot(lhs2D.x - location.x, lhs2D.y - location.y)
+            let rhsDist = hypot(rhs2D.x - location.x, rhs2D.y - location.y)
+            return lhsDist < rhsDist
+        }
+
+        return nearest
+    }
+
+    private func selectFurniture(_ model: ModelEntity, animated: Bool) {
+        selectedFurniture = model
+        showControls(for: model)
+        guard animated else { return }
+        animateSelectionFeedback(for: model)
+    }
+
+    private func animateSelectionFeedback(for model: ModelEntity) {
+        let originalScale = model.scale
+        model.scale = originalScale * SIMD3<Float>(repeating: 1.03)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            model.scale = originalScale
+        }
     }
 
     // MARK: - Loading
@@ -1015,19 +1063,20 @@ final class RoomVisualizeVC: UIViewController {
             model.scale = furnitureScale
             
             model.generateCollisionShapes(recursive: true)
+            await MainActor.run {
+                let anchor = AnchorEntity(world: .zero)
+                anchor.addChild(model)
+                self.arView.scene.addAnchor(anchor)
 
-            let anchor = AnchorEntity(world: .zero)
-            anchor.addChild(model)
-            arView.scene.addAnchor(anchor)
-
-            placedFurniture.append(model)
-            
-            // If proximity mode is active, add this furniture to tracking
-            if isProximityModeActive {
-                trackedFurnitureForProximity.append(model)
+                self.placedFurniture.append(model)
+                
+                // If proximity mode is active, add this furniture to tracking
+                if self.isProximityModeActive {
+                    self.trackedFurnitureForProximity.append(model)
+                }
+                
+                self.selectFurniture(model, animated: false)
             }
-            
-            showControls(for: model)
         }
     }
 

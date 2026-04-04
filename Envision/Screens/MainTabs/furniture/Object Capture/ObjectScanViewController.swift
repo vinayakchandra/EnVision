@@ -9,6 +9,12 @@ import RealityKit
 
 final class ObjectScanViewController: UIViewController {
 
+    private struct InstructionStep {
+        let icon: String
+        let title: String
+        let detail: String
+    }
+
     // MARK: - Camera
     private let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
@@ -21,9 +27,36 @@ final class ObjectScanViewController: UIViewController {
 
     // MARK: - UI Elements
     private let instructionCard = UIView()
+    private let instructionIconView = UIImageView()
     private let instructionTitle = UILabel()
     private let instructionDetails = UILabel()
-    private let continueButton = UIButton(type: .system)
+    private let instructionDots = UIStackView()
+    private let instructionNextButton = UIButton(type: .system)
+    private let instructionSkipButton = UIButton(type: .system)
+    private var instructionDotViews: [UIView] = []
+    private var currentInstructionStep = 0
+    private let instructionSteps: [InstructionStep] = [
+        InstructionStep(
+            icon: "lightbulb.max",
+            title: "Good lighting helps",
+            detail: "Use bright, even lighting and avoid harsh shadows on the object."
+        ),
+        InstructionStep(
+            icon: "cube.transparent",
+            title: "Clear space around object",
+            detail: "Keep the object isolated so the capture focuses on clean geometry."
+        ),
+        InstructionStep(
+            icon: "arrow.triangle.2.circlepath.camera",
+            title: "Move slowly around 360°",
+            detail: "Walk around the furniture steadily and capture all sides and heights."
+        ),
+        InstructionStep(
+            icon: "checkmark.seal",
+            title: "Capture enough photos",
+            detail: "Aim for at least 30 photos before finishing for better reconstruction."
+        ),
+    ]
 
     private let flashlightButton: UIButton = {
         let btn = UIButton(type: .system)
@@ -211,72 +244,143 @@ final class ObjectScanViewController: UIViewController {
 
     // MARK: - Instruction Card
     private func setupInstructionCard() {
-        instructionCard.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        instructionCard.layer.cornerRadius = 20
-        instructionCard.layer.masksToBounds = true
+        instructionCard.backgroundColor = .secondarySystemBackground
+        instructionCard.layer.cornerRadius = 24
+        instructionCard.layer.shadowColor = UIColor.black.cgColor
+        instructionCard.layer.shadowOpacity = 0.18
+        instructionCard.layer.shadowRadius = 20
+        instructionCard.layer.shadowOffset = CGSize(width: 0, height: 6)
         instructionCard.translatesAutoresizingMaskIntoConstraints = false
 
-        // Blur
-        let blur = UIBlurEffect(style: .systemUltraThinMaterialLight)
-        let blurView = UIVisualEffectView(effect: blur)
-        blurView.frame = instructionCard.bounds
-        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        instructionCard.addSubview(blurView)
+        instructionIconView.translatesAutoresizingMaskIntoConstraints = false
+        instructionIconView.contentMode = .scaleAspectFit
+        instructionIconView.tintColor = AppColors.accent
 
-        // Title
-        instructionTitle.text = "Before You Start Scanning"
-        instructionTitle.font = .boldSystemFont(ofSize: 20)
+        instructionTitle.font = .systemFont(ofSize: 20, weight: .bold)
         instructionTitle.textAlignment = .center
-        instructionTitle.textColor = .white
+        instructionTitle.textColor = .label
+        instructionTitle.numberOfLines = 2
         instructionTitle.translatesAutoresizingMaskIntoConstraints = false
 
-        // Details
-        instructionDetails.text =
-        """
-Ensure good lighting
-Clear the floor
-Move the phone slowly around the object
-"""
         instructionDetails.numberOfLines = 0
         instructionDetails.textAlignment = .center
-        instructionDetails.textColor = .white
-        instructionDetails.font = .systemFont(ofSize: 16)
+        instructionDetails.textColor = .secondaryLabel
+        instructionDetails.font = .systemFont(ofSize: 15)
         instructionDetails.translatesAutoresizingMaskIntoConstraints = false
 
-        // Continue Button
-        continueButton.setTitle("Continue", for: .normal)
-        continueButton.titleLabel?.font = .boldSystemFont(ofSize: 17)
-        continueButton.backgroundColor = .systemBlue
-        continueButton.tintColor = .white
-        continueButton.layer.cornerRadius = 12
-        continueButton.translatesAutoresizingMaskIntoConstraints = false
-        continueButton.addTarget(self, action: #selector(hideInstructionCard), for: .touchUpInside)
+        instructionDots.translatesAutoresizingMaskIntoConstraints = false
+        instructionDots.axis = .horizontal
+        instructionDots.spacing = 8
+        instructionDots.alignment = .center
+
+        instructionNextButton.setTitle("Next", for: .normal)
+        instructionNextButton.setTitleColor(.white, for: .normal)
+        instructionNextButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        instructionNextButton.backgroundColor = AppColors.accent
+        instructionNextButton.layer.cornerRadius = 14
+        instructionNextButton.translatesAutoresizingMaskIntoConstraints = false
+        instructionNextButton.addTarget(self, action: #selector(instructionNextTapped), for: .touchUpInside)
+
+        instructionSkipButton.setTitle("Skip", for: .normal)
+        instructionSkipButton.setTitleColor(.secondaryLabel, for: .normal)
+        instructionSkipButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .regular)
+        instructionSkipButton.translatesAutoresizingMaskIntoConstraints = false
+        instructionSkipButton.addTarget(self, action: #selector(hideInstructionCard), for: .touchUpInside)
+
+        instructionDotViews.removeAll()
+        instructionDots.arrangedSubviews.forEach { v in
+            instructionDots.removeArrangedSubview(v)
+            v.removeFromSuperview()
+        }
+        for i in 0..<instructionSteps.count {
+            let dot = UIView()
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            dot.layer.cornerRadius = 4
+            dot.backgroundColor = i == 0 ? AppColors.accent : .systemGray4
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: 8),
+                dot.heightAnchor.constraint(equalToConstant: 8),
+            ])
+            instructionDots.addArrangedSubview(dot)
+            instructionDotViews.append(dot)
+        }
 
         view.addSubview(instructionCard)
+        instructionCard.addSubview(instructionIconView)
         instructionCard.addSubview(instructionTitle)
         instructionCard.addSubview(instructionDetails)
-        instructionCard.addSubview(continueButton)
+        instructionCard.addSubview(instructionDots)
+        instructionCard.addSubview(instructionNextButton)
+        instructionCard.addSubview(instructionSkipButton)
 
         NSLayoutConstraint.activate([
             instructionCard.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             instructionCard.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            instructionCard.widthAnchor.constraint(equalToConstant: 300),
-            instructionCard.heightAnchor.constraint(equalToConstant: 240),
+            instructionCard.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.88),
 
-            instructionTitle.topAnchor.constraint(equalTo: instructionCard.topAnchor, constant: 20),
-            instructionTitle.centerXAnchor.constraint(equalTo: instructionCard.centerXAnchor),
+            instructionIconView.topAnchor.constraint(equalTo: instructionCard.topAnchor, constant: 32),
+            instructionIconView.centerXAnchor.constraint(equalTo: instructionCard.centerXAnchor),
+            instructionIconView.widthAnchor.constraint(equalToConstant: 56),
+            instructionIconView.heightAnchor.constraint(equalToConstant: 56),
 
-            instructionDetails.topAnchor.constraint(equalTo: instructionTitle.bottomAnchor, constant: 10),
-            instructionDetails.leadingAnchor.constraint(equalTo: instructionCard.leadingAnchor, constant: 20),
-            instructionDetails.trailingAnchor.constraint(equalTo: instructionCard.trailingAnchor, constant: -20),
+            instructionTitle.topAnchor.constraint(equalTo: instructionIconView.bottomAnchor, constant: 20),
+            instructionTitle.leadingAnchor.constraint(equalTo: instructionCard.leadingAnchor, constant: 24),
+            instructionTitle.trailingAnchor.constraint(equalTo: instructionCard.trailingAnchor, constant: -24),
 
-            continueButton.bottomAnchor.constraint(equalTo: instructionCard.bottomAnchor, constant: -20),
-            continueButton.centerXAnchor.constraint(equalTo: instructionCard.centerXAnchor),
-            continueButton.widthAnchor.constraint(equalToConstant: 120),
-            continueButton.heightAnchor.constraint(equalToConstant: 45)
+            instructionDetails.topAnchor.constraint(equalTo: instructionTitle.bottomAnchor, constant: 12),
+            instructionDetails.leadingAnchor.constraint(equalTo: instructionCard.leadingAnchor, constant: 24),
+            instructionDetails.trailingAnchor.constraint(equalTo: instructionCard.trailingAnchor, constant: -24),
+
+            instructionDots.topAnchor.constraint(equalTo: instructionDetails.bottomAnchor, constant: 24),
+            instructionDots.centerXAnchor.constraint(equalTo: instructionCard.centerXAnchor),
+
+            instructionNextButton.topAnchor.constraint(equalTo: instructionDots.bottomAnchor, constant: 20),
+            instructionNextButton.leadingAnchor.constraint(equalTo: instructionCard.leadingAnchor, constant: 24),
+            instructionNextButton.trailingAnchor.constraint(equalTo: instructionCard.trailingAnchor, constant: -24),
+            instructionNextButton.heightAnchor.constraint(equalToConstant: 50),
+
+            instructionSkipButton.topAnchor.constraint(equalTo: instructionNextButton.bottomAnchor, constant: 10),
+            instructionSkipButton.centerXAnchor.constraint(equalTo: instructionCard.centerXAnchor),
+            instructionSkipButton.bottomAnchor.constraint(equalTo: instructionCard.bottomAnchor, constant: -20),
         ])
 
         instructionCard.alpha = 0
+        updateInstructionContent(animated: false)
+    }
+
+    private func updateInstructionContent(animated: Bool) {
+        let step = instructionSteps[currentInstructionStep]
+        let isLast = currentInstructionStep == instructionSteps.count - 1
+
+        let updateBlock = {
+            self.instructionIconView.image = UIImage(
+                systemName: step.icon,
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 40, weight: .medium)
+            )
+            self.instructionTitle.text = step.title
+            self.instructionDetails.text = step.detail
+            self.instructionNextButton.setTitle(isLast ? "Start Scanning" : "Next", for: .normal)
+
+            for (i, dot) in self.instructionDotViews.enumerated() {
+                UIView.animate(withDuration: animated ? 0.25 : 0) {
+                    dot.backgroundColor = i == self.currentInstructionStep ? AppColors.accent : .systemGray4
+                    dot.transform = i == self.currentInstructionStep
+                        ? CGAffineTransform(scaleX: 1.4, y: 1.4)
+                        : .identity
+                }
+            }
+        }
+
+        if animated {
+            UIView.transition(
+                with: instructionCard,
+                duration: 0.3,
+                options: [.transitionCrossDissolve],
+                animations: updateBlock
+            )
+        } else {
+            updateBlock()
+        }
     }
 
     private func showInstructionCard() {
@@ -292,6 +396,15 @@ Move the phone slowly around the object
 
         captureStartTime = Date()
         startAutoCapture()
+    }
+
+    @objc private func instructionNextTapped() {
+        if currentInstructionStep < instructionSteps.count - 1 {
+            currentInstructionStep += 1
+            updateInstructionContent(animated: true)
+        } else {
+            hideInstructionCard()
+        }
     }
 
     // MARK: - Flashlight

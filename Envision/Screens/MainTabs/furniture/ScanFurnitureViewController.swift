@@ -831,8 +831,7 @@ final class ScanFurnitureViewController: UIViewController {
         return [
             AppTips.furnitureQuality,
             AppTips.furniturePhotoCount,
-            AppTips.furnitureLighting,
-            AppTips.furnitureCoverage,
+            AppTips.furnitureLongPress,
             AppTips.furnitureCategories
         ]
     }
@@ -896,7 +895,7 @@ final class ScanFurnitureViewController: UIViewController {
             return placement(pointingTo: viewForRightBarButton(at: 0), edge: .top)
         case AppTips.furnitureCategories.id:
             return placement(pointingTo: firstChipCell(), edge: .bottom)
-        case AppTips.furnitureQuality.id, AppTips.furniturePhotoCount.id, AppTips.furnitureLighting.id, AppTips.furnitureCoverage.id:
+        case AppTips.furnitureQuality.id, AppTips.furniturePhotoCount.id, AppTips.furnitureLongPress.id:
             return placement(pointingTo: firstFurnitureCell(), edge: .bottom)
         default:
             return TipPlacement(edge: .bottom, offset: 0)

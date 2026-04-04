@@ -185,6 +185,14 @@ enum AppTips {
         dismissActionTitle: "Later"
     )
 
+    static let furnitureLongPress = TipDefinition(
+        id: "furniture_long_press",
+        title: "Long-Press for Quick Actions",
+        message: "Hold any furniture thumbnail to rename, share, preview, recategorize, or delete without opening it.",
+        primaryActionTitle: "Got It",
+        dismissActionTitle: "Later"
+    )
+
     static let furnitureCategories = TipDefinition(
         id: "furniture_categories",
         title: "Organize Furniture",
@@ -272,6 +280,7 @@ enum AppTips {
         furnitureCoverage.id,
         furnitureFromPhotos.id,
         furnitureImportUSDZ.id,
+        furnitureLongPress.id,
         furnitureCategories.id,
         // Profile
         profileSettings.id,
@@ -300,10 +309,9 @@ enum AppTips {
         furnitureAutomaticCapture.id,
         furniturePhotoCount.id,
         furnitureQuality.id,
-        furnitureLighting.id,
-        furnitureCoverage.id,
         furnitureFromPhotos.id,
         furnitureImportUSDZ.id,
+        furnitureLongPress.id,
         furnitureCategories.id,
     ]
 
