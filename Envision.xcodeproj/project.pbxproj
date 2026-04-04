@@ -205,7 +205,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 25.0.0;
+				MARKETING_VERSION = 26.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.srmist.envisionit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -241,7 +241,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 25.0.0;
+				MARKETING_VERSION = 26.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.srmist.envisionit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
