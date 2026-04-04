@@ -97,6 +97,7 @@ final class RoomEditVC: UIViewController {
         cleanupLabels()
         hideRoomRuler()
         disableCollisionFeatures()
+        persistHiddenEntityState()
         saveColoredThumbnail()
     }
 
@@ -462,8 +463,13 @@ final class RoomEditVC: UIViewController {
             self.collisionsEnabled = false
             self.disableCollisionFeatures()
             self.hiddenEntityPrefixes.removeAll()
+            RoomColorManager.shared.clearColors(for: self.roomURL)
+            self.persistHiddenEntityState()
             self.labels.values.forEach { $0.isEnabled = false }
             self.resetRoomAppearanceToPlainWhite()
+            if let model = self.displayedModel {
+                self.applyMaterialRules(to: model)
+            }
             self.applyEntityVisibilityRules()
             self.refreshFloatingMenu()
             self.updateDockButtonStates()
@@ -641,6 +647,7 @@ final class RoomEditVC: UIViewController {
     }
     
     @objc private func saveAndGoBack() {
+        persistHiddenEntityState()
         // Save thumbnail using ARView snapshot before going back
         saveColoredThumbnail()
         
@@ -717,6 +724,7 @@ final class RoomEditVC: UIViewController {
         if isParametricModel {
             applyMaterialRules(to: clone)
         }
+        hiddenEntityPrefixes = RoomColorManager.shared.getHiddenEntityPrefixes(roomURL: roomURL)
         applyEntityVisibilityRules()
         
         if collisionsEnabled {
@@ -725,6 +733,10 @@ final class RoomEditVC: UIViewController {
 
         setupCamera()
         setupOrbitJoystick()
+    }
+
+    private func persistHiddenEntityState() {
+        RoomColorManager.shared.saveHiddenEntityPrefixes(hiddenEntityPrefixes, roomURL: roomURL)
     }
 
     private func fitToScreen(_ model: ModelEntity) {
@@ -1293,6 +1305,13 @@ extension RoomEditVC: TexturePickerDelegate {
         let nameToSave: String? = option.name.isEmpty ? nil : option.name
         let key = surface == .floor ? RoomColorManager.floorTextureKey : RoomColorManager.wallTextureKey
         RoomColorManager.shared.saveTextureName(nameToSave, for: key, roomURL: roomURL)
+
+        // Deterministic behavior:
+        // When user selects "None", clear saved color for that surface so it falls back to default plain material.
+        if option.name.isEmpty {
+            let colorKey = surface == .floor ? RoomColorManager.floorKey : RoomColorManager.wallKey
+            RoomColorManager.shared.removeStyleValue(for: colorKey, roomURL: roomURL)
+        }
 
         if let root = displayedModel {
             applyMaterialRules(to: root)

@@ -22,6 +22,7 @@ final class RoomColorManager {
     // Key suffix for texture names
     static let floorTextureKey = "floor_texture"
     static let wallTextureKey  = "wall_texture"
+    static let hiddenPrefixesKey = "hidden_prefixes"
     
     // MARK: - Public API
     
@@ -88,6 +89,16 @@ final class RoomColorManager {
         persistColors(for: roomURL)
     }
 
+    /// Remove a persisted entry for a given key from the room style payload.
+    func removeStyleValue(for key: String, roomURL: URL) {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            colorStorage[roomKey] = [:]
+        }
+        colorStorage[roomKey]?.removeValue(forKey: key)
+        persistColors(for: roomURL)
+    }
+
     /// Get saved texture name for an element type, or nil if not set
     func getTextureName(for key: String, roomURL: URL) -> String? {
         let roomKey = roomURL.path
@@ -96,6 +107,38 @@ final class RoomColorManager {
         }
         loadColors(for: roomURL)
         return colorStorage[roomKey]?[key]
+    }
+
+    /// Persist hidden entity prefixes for a room (e.g. wall,floor,door...).
+    func saveHiddenEntityPrefixes(_ prefixes: Set<String>, roomURL: URL) {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            colorStorage[roomKey] = [:]
+        }
+        if prefixes.isEmpty {
+            colorStorage[roomKey]?.removeValue(forKey: Self.hiddenPrefixesKey)
+        } else {
+            colorStorage[roomKey]?[Self.hiddenPrefixesKey] = prefixes.sorted().joined(separator: ",")
+        }
+        persistColors(for: roomURL)
+    }
+
+    /// Read hidden entity prefixes for a room.
+    func getHiddenEntityPrefixes(roomURL: URL) -> Set<String> {
+        let roomKey = roomURL.path
+        let raw: String? = {
+            if let value = colorStorage[roomKey]?[Self.hiddenPrefixesKey] { return value }
+            loadColors(for: roomURL)
+            return colorStorage[roomKey]?[Self.hiddenPrefixesKey]
+        }()
+
+        guard let raw, !raw.isEmpty else { return [] }
+        return Set(raw.split(separator: ",").map { String($0) })
+    }
+
+    /// Clear all hidden-entity persistence for the room.
+    func clearHiddenEntityPrefixes(roomURL: URL) {
+        removeStyleValue(for: Self.hiddenPrefixesKey, roomURL: roomURL)
     }
 
     /// Migrate all persisted data (color JSON, thumbnail, memory cache) from the old room URL to the new one.
