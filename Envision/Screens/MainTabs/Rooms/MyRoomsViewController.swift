@@ -218,15 +218,14 @@ final class MyRoomsViewController: UIViewController {
     }
 
     private func makeChipsSection() -> NSCollectionLayoutSection {
-        let chipWidth: CGFloat = 124
         let chipHeight: CGFloat = 30
         let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
-            widthDimension: .absolute(chipWidth),
+            widthDimension: .estimated(150),
             heightDimension: .absolute(chipHeight)
         ))
 
         let group = NSCollectionLayoutGroup.horizontal(
-            layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(chipWidth), heightDimension: .absolute(chipHeight)),
+            layoutSize: NSCollectionLayoutSize(widthDimension: .estimated(150), heightDimension: .absolute(chipHeight)),
             subitems: [item]
         )
 

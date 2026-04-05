@@ -423,16 +423,15 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     private func makeChipsSection() -> NSCollectionLayoutSection {
-        let chipWidth: CGFloat = 124
         let chipHeight: CGFloat = 30
         let itemSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(chipWidth),
+            widthDimension: .estimated(150),
             heightDimension: .absolute(chipHeight)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
 
         let groupSize = NSCollectionLayoutSize(
-            widthDimension: .absolute(chipWidth),
+            widthDimension: .estimated(150),
             heightDimension: .absolute(chipHeight)
         )
         let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitems: [item])
@@ -1358,7 +1357,7 @@ final class FurnitureChipCell: UICollectionViewCell {
         )
         configuration.imagePlacement = .leading
         configuration.imagePadding = 4
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12)
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.baseForegroundColor = isSelected ? .white : color
         configuration.background.backgroundColor = isSelected ? color : color.withAlphaComponent(0.1)
