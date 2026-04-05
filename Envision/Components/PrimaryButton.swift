@@ -24,5 +24,11 @@ final class PrimaryButton: UIButton {
         layer.shadowOffset = CGSize(width: 0, height: 4)
         layer.shadowRadius = 8
         layer.shadowOpacity = 0.3
+
+        addTarget(self, action: #selector(handleTapHaptic), for: .touchUpInside)
+    }
+
+    @objc private func handleTapHaptic() {
+        HapticsManager.shared.impactLight()
     }
 }

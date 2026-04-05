@@ -13,7 +13,12 @@ final class PrimaryButton1: UIButton {
 
         self.configuration = config
         translatesAutoresizingMaskIntoConstraints = false
+        addTarget(self, action: #selector(handleTapHaptic), for: .touchUpInside)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    @objc private func handleTapHaptic() {
+        HapticsManager.shared.impactLight()
+    }
 }

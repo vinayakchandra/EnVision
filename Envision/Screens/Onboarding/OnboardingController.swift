@@ -170,13 +170,16 @@ final class OnboardingController: UIViewController {
     // MARK: - Actions
 
     @objc private func continueTapped() {
+        HapticsManager.shared.impactLight()
         if currentIndex == pages.count - 1 {
+            HapticsManager.shared.success()
             goToLogin()
             return
         }
         let next = currentIndex + 1
         pageVC.setViewControllers([pages[next]], direction: .forward, animated: true) { [weak self] done in
             guard done, let self else { return }
+            HapticsManager.shared.selection()
             self.currentIndex = next
             self.updateIndicator(to: next)
             self.updateContinueTitle()
@@ -185,6 +188,7 @@ final class OnboardingController: UIViewController {
     }
 
     @objc private func skipTapped() {
+        HapticsManager.shared.selection()
         goToLogin()
     }
 
@@ -227,6 +231,7 @@ extension OnboardingController: UIPageViewControllerDelegate {
               let page = pageViewController.viewControllers?.first as? OnboardingPage,
               let index = pages.firstIndex(of: page) else { return }
 
+        HapticsManager.shared.selection()
         currentIndex = index
         updateIndicator(to: index)
         updateContinueTitle()

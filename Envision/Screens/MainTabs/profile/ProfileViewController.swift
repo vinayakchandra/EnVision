@@ -239,6 +239,7 @@ class ProfileViewController: UIViewController {
 
     // Logout
     private func handleLogout() {
+        HapticsManager.shared.warning()
         let alert = UIAlertController(
             title: "Sign Out",
             message: "Are you sure you want to sign out?",
@@ -258,6 +259,7 @@ class ProfileViewController: UIViewController {
         do {
             try AuthManager.shared.signOut()
         } catch {
+            HapticsManager.shared.error()
             let alert = UIAlertController(
                 title: "Sign Out Failed",
                 message: error.localizedDescription,
@@ -300,6 +302,7 @@ class ProfileViewController: UIViewController {
     }
 
     @objc private func editProfileTapped() {
+        HapticsManager.shared.impactLight()
         let editProfileVC = EditProfileViewController()
         let nav = UINavigationController(rootViewController: editProfileVC)
         nav.modalPresentationStyle = .formSheet
@@ -343,6 +346,7 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        HapticsManager.shared.selection()
 
         let section = Section(rawValue: indexPath.section)!
         let item = items[section]![indexPath.row]
@@ -397,6 +401,7 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
         
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Restart", style: .default) { _ in
+            HapticsManager.shared.success()
             TourManager.shared.resetTour()
             
             let confirm = UIAlertController(title: "Tour Reset", message: "The app tour will appear again as you navigate.", preferredStyle: .alert)

@@ -1,10 +1,11 @@
 import UIKit
 
-final class MainTabBarController: UITabBarController {
+final class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
     private var furnitureHandoffOverlay: TabTourOverlayView?
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        delegate = self
         setupTabs()
         setupLiquidGlassEffect()
         setupTraitChangeObservation()
@@ -158,6 +159,10 @@ final class MainTabBarController: UITabBarController {
         let width = tabBar.bounds.width / CGFloat(max(items.count, 1))
         let fallback = CGRect(x: CGFloat(index) * width, y: 0, width: width, height: tabBar.bounds.height)
         return tabBar.convert(fallback, to: view)
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        HapticsManager.shared.selection()
     }
 }
 

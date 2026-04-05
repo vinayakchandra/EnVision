@@ -82,6 +82,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
 
         // NORMAL MODE → open room
         guard indexPath.section == 1 else { return }
+        HapticsManager.shared.impactLight()
         let url = displayFiles[indexPath.item]
         navigationController?.pushViewController(RoomViewerViewController(roomURL: url), animated: true)
     }
@@ -300,6 +301,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
             RoomColorManager.shared.renameRoom(from: url, to: newURL)
 
             loadRoomFiles()
+            HapticsManager.shared.success()
             showToast(message: "Renamed to \(newName)")
         } catch {
             showAlert(title: "Rename Failed", message: error.localizedDescription)
@@ -327,6 +329,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
                     RoomColorManager.shared.clearColors(for: url)
 
                     self?.loadRoomFiles()
+                    HapticsManager.shared.success()
                     self?.showToast(message: "Room deleted")
                 } else {
                     self?.showAlert(title: "Delete Failed", message: "Could not delete the room model.")
@@ -362,6 +365,7 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
                 self.roomFiles.removeAll { $0 == url }
                 self.thumbnailCache.removeObject(forKey: url as NSURL)
                 collectionView.deleteItems(at: [indexPath])
+                HapticsManager.shared.success()
                 completion(true)
             }
         }
@@ -380,6 +384,7 @@ extension MyRoomsViewController: UISearchResultsUpdating {
 // MARK: - QLPreviewControllerDataSource
 extension MyRoomsViewController: QLPreviewControllerDataSource {
     func quickLook(url: URL) {
+        HapticsManager.shared.impactLight()
         previewURL = url
         let preview = QLPreviewController()
         preview.dataSource = self

@@ -173,6 +173,7 @@ final class ForgotPasswordViewController: UIViewController {
                 self?.setSending(false)
                 switch result {
                 case .success:
+                    HapticsManager.shared.success()
                     let alert = UIAlertController(
                         title: "Reset Email Sent",
                         message: "Check your inbox for password reset instructions.",
@@ -190,6 +191,7 @@ final class ForgotPasswordViewController: UIViewController {
     }
 
     private func showError(_ message: String) {
+        HapticsManager.shared.error()
         errorLabel.text = message
         UIView.animate(withDuration: 0.25) { self.errorLabel.alpha = 1 }
     }

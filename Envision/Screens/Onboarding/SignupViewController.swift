@@ -195,14 +195,20 @@ final class SignupViewController: UIViewController {
         AuthManager.shared.signUp(name: name, email: email, password: password) { [weak self] result in
             switch result {
             case .success(_):
-                DispatchQueue.main.async { self?.goToMainApp() }
+                DispatchQueue.main.async {
+                    HapticsManager.shared.success()
+                    self?.goToMainApp()
+                }
             case .failure(let error):
-                DispatchQueue.main.async { self?.showError(error.localizedDescription) }
+                DispatchQueue.main.async {
+                    self?.showError(error.localizedDescription)
+                }
             }
         }
     }
 
     @objc private func handleGoogleSignIn() {
+        HapticsManager.shared.impactLight()
         errorLabel.alpha = 0
         googleButton.isEnabled = false
 
@@ -210,6 +216,7 @@ final class SignupViewController: UIViewController {
             switch result {
             case .success:
                 DispatchQueue.main.async {
+                    HapticsManager.shared.success()
                     self?.googleButton.isEnabled = true
                     self?.goToMainApp()
                 }
@@ -224,6 +231,7 @@ final class SignupViewController: UIViewController {
     }
 
     private func showError(_ msg: String) {
+        HapticsManager.shared.error()
         errorLabel.text = msg
         UIView.animate(withDuration: 0.25) {
             self.errorLabel.alpha = 1

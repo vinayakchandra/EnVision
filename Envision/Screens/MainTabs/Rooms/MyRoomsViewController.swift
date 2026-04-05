@@ -313,6 +313,7 @@ final class MyRoomsViewController: UIViewController {
     }
 
     @objc func chipTapped(_ sender: UIButton) {
+        HapticsManager.shared.selection()
         guard let cell = sender.superview?.superview as? ChipCell,
               let indexPath = collectionView.indexPath(for: cell) else { return }
 
@@ -334,6 +335,7 @@ final class MyRoomsViewController: UIViewController {
     }
 
     private func enableMultipleSelection() {
+        HapticsManager.shared.selection()
         isSelectionMode = true
         TipCoordinator.shared.dismissTip(from: tipContainerView)
         collectionView.allowsMultipleSelection = true
@@ -359,6 +361,7 @@ final class MyRoomsViewController: UIViewController {
     }
 
     @objc private func disableMultipleSelection() {
+        HapticsManager.shared.selection()
         isSelectionMode = false
         collectionView.allowsMultipleSelection = false
 
@@ -377,6 +380,7 @@ final class MyRoomsViewController: UIViewController {
 
     @objc private func deleteSelectedRooms() {
         guard let selected = collectionView.indexPathsForSelectedItems, !selected.isEmpty else {
+            HapticsManager.shared.warning()
             showToast(message: "No rooms selected")
             return
         }
@@ -388,6 +392,7 @@ final class MyRoomsViewController: UIViewController {
 
     private func confirmDeleteAll() {
         guard !roomFiles.isEmpty else {
+            HapticsManager.shared.warning()
             showToast(message: "No rooms to delete")
             return
         }
@@ -418,6 +423,7 @@ final class MyRoomsViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.loadRoomFiles()
             self?.disableMultipleSelection()
+            HapticsManager.shared.success()
             self?.showToast(message: "Deleted \(count) room(s)")
         }
     }
@@ -792,6 +798,7 @@ final class MyRoomsViewController: UIViewController {
     }
 
     func showAlert(title: String, message: String) {
+        HapticsManager.shared.error()
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
@@ -800,7 +807,10 @@ final class MyRoomsViewController: UIViewController {
     func showConfirmation(title: String, message: String, onConfirm: @escaping () -> Void) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in onConfirm() })
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
+            HapticsManager.shared.warning()
+            onConfirm()
+        })
         present(alert, animated: true)
     }
 

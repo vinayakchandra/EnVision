@@ -260,6 +260,7 @@ final class ScanFurnitureViewController: UIViewController {
 
     // MARK: - Menu Actions
     @objc private func enableMultipleSelection() {
+        HapticsManager.shared.selection()
         TipCoordinator.shared.dismissTip(from: tipContainerView)
         collectionView.allowsMultipleSelection = true
 
@@ -272,6 +273,7 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     @objc private func disableMultipleSelection() {
+        HapticsManager.shared.selection()
         collectionView.allowsMultipleSelection = false
 
         // Deselect all
@@ -287,6 +289,7 @@ final class ScanFurnitureViewController: UIViewController {
 
     @objc private func deleteSelectedModels() {
         guard let selected = collectionView.indexPathsForSelectedItems, !selected.isEmpty else {
+            HapticsManager.shared.warning()
             showToast(message: "No models selected")
             return
         }
@@ -332,12 +335,14 @@ final class ScanFurnitureViewController: UIViewController {
 
         collectionView.deleteItems(at: sortedPaths)
         disableMultipleSelection()
+        HapticsManager.shared.success()
         showToast(message: "✓ Deleted \(sortedPaths.count) model(s)")
         updateEmptyState()
     }
 
     private func confirmDeleteAll() {
         guard !furnitureFiles.isEmpty else {
+            HapticsManager.shared.warning()
             showToast(message: "No models to delete")
             return
         }
@@ -366,6 +371,7 @@ final class ScanFurnitureViewController: UIViewController {
         filteredFiles.removeAll()
         thumbnailCache.removeAllObjects()
         collectionView.reloadData()
+        HapticsManager.shared.success()
         showToast(message: "✓ All models deleted")
         updateEmptyState()
     }
@@ -1046,6 +1052,7 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
         chipTapped(at: indexPath.item)
     }
     private func chipTapped(at index: Int) {
+        HapticsManager.shared.selection()
         let chip = allChipsData[index]
 
         // Add press animation
@@ -1095,6 +1102,7 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
     }
 
     private func showQuickLook(url: URL) {
+        HapticsManager.shared.impactLight()
         previewURL = url
         let preview = QLPreviewController()
         preview.dataSource = self
@@ -1160,6 +1168,7 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
             performRename(at: indexPath, url: url, newName: newName)
         } else {
             collectionView.reloadItems(at: [indexPath])
+            HapticsManager.shared.success()
             showToast(message: "✓ Category updated to \(category.rawValue)")
         }
     }
@@ -1181,13 +1190,16 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
             }
 
             collectionView.reloadItems(at: [indexPath])
+            HapticsManager.shared.success()
             showToast(message: "✓ Renamed to \(newName)")
         } catch {
+            HapticsManager.shared.error()
             print("❌ Rename failed: \(error)")
         }
     }
 
     private func shareModel(url: URL) {
+        HapticsManager.shared.impactLight()
         let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         if let popover = activityVC.popoverPresentationController {
             popover.sourceView = view
@@ -1223,6 +1235,7 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
                     }
 
                     self.collectionView.deleteItems(at: [indexPath])
+                    HapticsManager.shared.success()
                     self.showToast(message: "✓ Model deleted")
                     self.updateEmptyState()
                 }
