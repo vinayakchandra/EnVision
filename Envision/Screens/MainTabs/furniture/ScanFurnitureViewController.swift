@@ -236,15 +236,15 @@ final class ScanFurnitureViewController: UIViewController {
                      attributes: .destructive) { _ in
                 self.confirmDeleteAll()
             },
-
-            UIAction(title: "Room Geometry Playground",
-                     image: UIImage(systemName: "arkit")) { [weak self] _ in
-                self?.showARViewController()
-            },
-            UIAction(title: "Room with replaced Furniture",
-                     image: UIImage(systemName: "arkit")) { [weak self] _ in
-                self?.showRoomWithFurniture()
-            }
+            //
+            // UIAction(title: "Room Geometry Playground",
+            //          image: UIImage(systemName: "arkit")) { [weak self] _ in
+            //     self?.showARViewController()
+            // },
+            // UIAction(title: "Room with replaced Furniture",
+            //          image: UIImage(systemName: "arkit")) { [weak self] _ in
+            //     self?.showRoomWithFurniture()
+            // }
         ])
     }
 
