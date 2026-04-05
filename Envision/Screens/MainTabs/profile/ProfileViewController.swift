@@ -85,6 +85,11 @@ class ProfileViewController: UIViewController {
         refreshProfileHeader()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        profileImageView.layer.cornerRadius = min(profileImageView.bounds.width, profileImageView.bounds.height) / 2
+    }
+
     // MARK: - Table Setup
     private func setupTable() {
         tableView.translatesAutoresizingMaskIntoConstraints = false
@@ -125,7 +130,10 @@ class ProfileViewController: UIViewController {
         profileImageView.tintColor = .systemGray4
         profileImageView.contentMode = .scaleAspectFill
         profileImageView.clipsToBounds = true
-        profileImageView.layer.cornerRadius = 60
+        profileImageView.layer.cornerRadius = 55
+        profileImageView.layer.borderWidth = 4
+        profileImageView.layer.borderColor = UIColor(hex: "#4A9085").withAlphaComponent(0.85).cgColor
+        profileImageView.backgroundColor = UIColor.systemGray6.withAlphaComponent(0.25)
 
         container.addArrangedSubview(profileImageView)
 

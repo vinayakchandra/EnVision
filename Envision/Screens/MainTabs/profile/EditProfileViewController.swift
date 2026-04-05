@@ -35,6 +35,11 @@ class EditProfileViewController: UIViewController, UIImagePickerControllerDelega
         populateUserData()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        profileImageView.layer.cornerRadius = min(profileImageView.bounds.width, profileImageView.bounds.height) / 2
+    }
+
     private func setupNavBar() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: "Cancel",
