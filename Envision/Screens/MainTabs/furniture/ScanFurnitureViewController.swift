@@ -407,11 +407,11 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     private func createCompositionalLayout() -> UICollectionViewLayout {
-        return UICollectionViewCompositionalLayout { [weak self] sectionIndex, _ in
+        return UICollectionViewCompositionalLayout { [weak self] sectionIndex, layoutEnvironment in
             if sectionIndex == 0 {
                 return self?.makeChipsSection()
             } else {
-                return self?.makeFurnitureSection()
+                return self?.makeFurnitureSection(layoutEnvironment: layoutEnvironment)
             }
         }
     }
@@ -438,19 +438,23 @@ final class ScanFurnitureViewController: UIViewController {
         return section
     }
 
-    private func makeFurnitureSection() -> NSCollectionLayoutSection {
+    private func makeFurnitureSection(layoutEnvironment: NSCollectionLayoutEnvironment) -> NSCollectionLayoutSection {
+        let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2
+        let sectionHorizontalInset: CGFloat = 16
+        let itemSpacing: CGFloat = 12
+        let availableWidth = layoutEnvironment.container.effectiveContentSize.width - (sectionHorizontalInset * 2) - (itemSpacing * CGFloat(columns - 1))
+        let itemWidth = floor(max(120, availableWidth / CGFloat(columns)))
+        let itemHeight = floor(itemWidth * 1.02) // square-ish card with a little room for metadata
+
         let itemSize = NSCollectionLayoutSize(
-            widthDimension: .fractionalWidth(1.0),
-            heightDimension: .fractionalHeight(1.0)
+            widthDimension: .absolute(itemWidth),
+            heightDimension: .absolute(itemHeight)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
-        item.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
 
-        let groupHeight: CGFloat = 200
-        let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2
         let groupSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1.0),
-            heightDimension: .absolute(groupHeight)
+            heightDimension: .absolute(itemHeight)
         )
 
         let group = NSCollectionLayoutGroup.horizontal(
@@ -458,8 +462,10 @@ final class ScanFurnitureViewController: UIViewController {
             repeatingSubitem: item,
             count: columns
         )
+        group.interItemSpacing = .fixed(itemSpacing)
         let section = NSCollectionLayoutSection(group: group)
-        section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        section.interGroupSpacing = itemSpacing
+        section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: sectionHorizontalInset, bottom: 8, trailing: sectionHorizontalInset)
         return section
     }
 
@@ -1010,6 +1016,19 @@ extension ScanFurnitureViewController: UICollectionViewDataSource {
 
 // MARK: - UICollectionViewDelegate
 extension ScanFurnitureViewController: UICollectionViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        guard indexPath.section == 1 else { return true }
+
+        // In normal mode, open Quick Look directly without entering selected state.
+        if !collectionView.allowsMultipleSelection {
+            showQuickLook(url: modelURL(at: indexPath))
+            return false
+        }
+
+        // In multi-select mode, keep standard selection behavior.
+        return true
+    }
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         // Section 0: Chip selection
         if indexPath.section == 0 {
@@ -1017,9 +1036,8 @@ extension ScanFurnitureViewController: UICollectionViewDelegate {
             return
         }
 
-        // Section 1: Furniture selection
-        let url = modelURL(at: indexPath)
-        self.showQuickLook(url: url)
+        // Section 1: Only select in multi-select mode.
+        guard collectionView.allowsMultipleSelection else { return }
     }
 
     @objc private func chipButtonTapped(_ sender: UIButton) {
