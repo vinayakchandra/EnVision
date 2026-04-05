@@ -21,8 +21,6 @@ class EditProfileViewController: UIViewController, UIImagePickerControllerDelega
     private let changePhotoButton = UIButton(type: .system)
 
     private let nameField = UITextField()
-    private let emailField = UITextField()
-    private let bioField = UITextView()
     private var selectedProfileImage: UIImage?
 
     override func viewDidLoad() {
@@ -95,25 +93,9 @@ class EditProfileViewController: UIViewController, UIImagePickerControllerDelega
         nameField.placeholder = "Name"
         nameField.borderStyle = .roundedRect
 
-        emailField.placeholder = "Email"
-        emailField.keyboardType = .emailAddress
-        emailField.autocapitalizationType = .none
-        emailField.borderStyle = .roundedRect
-        emailField.isEnabled = false
-        emailField.textColor = .secondaryLabel
-
-        bioField.layer.cornerRadius = 8
-        bioField.layer.borderWidth = 1
-        bioField.layer.borderColor = UIColor.systemGray4.cgColor
-        bioField.text = ""
-        bioField.font = .systemFont(ofSize: 16)
-        bioField.heightAnchor.constraint(equalToConstant: 120).isActive = true
-
         stack.addArrangedSubview(photoContainerView)
         stack.addArrangedSubview(changePhotoButton)
         stack.addArrangedSubview(nameField)
-        stack.addArrangedSubview(emailField)
-        stack.addArrangedSubview(bioField)
 
         view.addSubview(stack)
 
@@ -130,13 +112,9 @@ class EditProfileViewController: UIViewController, UIImagePickerControllerDelega
                 ?? UserManager.shared.currentUser?.name
                 ?? firebaseUser.email?.components(separatedBy: "@").first?.capitalized
                 ?? "User"
-            emailField.text = firebaseUser.email ?? UserManager.shared.currentUser?.email
         } else {
             nameField.text = UserManager.shared.currentUser?.name ?? "User"
-            emailField.text = UserManager.shared.currentUser?.email ?? ""
         }
-
-        bioField.text = UserManager.shared.currentUser?.bio ?? ""
 
         if let image = UserManager.shared.loadProfileImage() {
             profileImageView.image = image
@@ -169,8 +147,7 @@ class EditProfileViewController: UIViewController, UIImagePickerControllerDelega
             return
         }
 
-        let bioText = bioField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-        UserManager.shared.updateProfile(name: name, bio: bioText?.isEmpty == true ? nil : bioText)
+        UserManager.shared.updateProfile(name: name)
 
         if let image = selectedProfileImage {
             let saved = UserManager.shared.saveProfileImage(image)
