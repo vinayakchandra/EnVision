@@ -46,8 +46,6 @@ final class RoomVisualizeVC: UIViewController {
     private let arView: ARView = {
         let view = ARView(frame: .zero)
         view.cameraMode = .nonAR
-        // Grey-blueish background for better button visibility
-        view.environment.background = .color(UIColor(red: 0.85, green: 0.88, blue: 0.92, alpha: 1.0))
         return view
     }()
 
@@ -73,6 +71,7 @@ final class RoomVisualizeVC: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
 
         setupLayout()
+        arView.environment.background = .color(.systemBackground)
         setupLoadingOverlay()
         setupNavigation()
         setupGestures()
