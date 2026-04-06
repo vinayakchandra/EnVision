@@ -52,6 +52,9 @@ final class RoomVisualizeVC: UIViewController {
     }()
 
     private var controlPanel: FurnitureControlPanel?
+    private var loadingOverlay: UIVisualEffectView?
+    private var loadingIndicator: UIActivityIndicatorView?
+    private var loadingLabel: UILabel?
 
     // MARK: - Init
     init(roomURL: URL) {
@@ -70,6 +73,7 @@ final class RoomVisualizeVC: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
 
         setupLayout()
+        setupLoadingOverlay()
         setupNavigation()
         setupGestures()
         RoomColorManager.shared.ensureBundledTexturesAvailable()
@@ -96,6 +100,60 @@ final class RoomVisualizeVC: UIViewController {
                                         arView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                                         arView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
                                     ])
+    }
+
+    private func setupLoadingOverlay() {
+        let blur = UIBlurEffect(style: .systemMaterial)
+        let overlay = UIVisualEffectView(effect: blur)
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.layer.cornerRadius = 12
+        overlay.clipsToBounds = true
+        overlay.isHidden = true
+
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.hidesWhenStopped = true
+
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "Loading room..."
+        label.font = .preferredFont(forTextStyle: .body)
+        label.textAlignment = .center
+
+        overlay.contentView.addSubview(indicator)
+        overlay.contentView.addSubview(label)
+        view.addSubview(overlay)
+
+        NSLayoutConstraint.activate([
+            overlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            overlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            overlay.widthAnchor.constraint(equalToConstant: 220),
+            overlay.heightAnchor.constraint(equalToConstant: 120),
+
+            indicator.topAnchor.constraint(equalTo: overlay.contentView.topAnchor, constant: 18),
+            indicator.centerXAnchor.constraint(equalTo: overlay.contentView.centerXAnchor),
+
+            label.topAnchor.constraint(equalTo: indicator.bottomAnchor, constant: 12),
+            label.leadingAnchor.constraint(equalTo: overlay.contentView.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: overlay.contentView.trailingAnchor, constant: -12),
+        ])
+
+        loadingOverlay = overlay
+        loadingIndicator = indicator
+        loadingLabel = label
+    }
+
+    private func showLoadingOverlay(message: String = "Loading room...") {
+        loadingLabel?.text = message
+        loadingOverlay?.isHidden = false
+        loadingIndicator?.startAnimating()
+        view.isUserInteractionEnabled = false
+    }
+
+    private func hideLoadingOverlay() {
+        loadingIndicator?.stopAnimating()
+        loadingOverlay?.isHidden = true
+        view.isUserInteractionEnabled = true
     }
 
     // MARK: - Navigation
@@ -879,14 +937,19 @@ final class RoomVisualizeVC: UIViewController {
 
     // MARK: - Loading
     private func loadRoom() {
+        showLoadingOverlay()
         Task {
             do {
                 let entity = try await Entity(contentsOf: roomURL)
                 await MainActor.run {
                     setupScene(with: entity)
+                    hideLoadingOverlay()
                 }
             } catch {
-                print("Failed to load room: \(error)")
+                await MainActor.run {
+                    hideLoadingOverlay()
+                    print("Failed to load room: \(error)")
+                }
             }
         }
     }
