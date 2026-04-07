@@ -262,8 +262,16 @@ final class SaveManager {
     
     private func generateFileName(originalName: String, type: ModelType) -> String {
         let timestamp = Date().timeIntervalSince1970
-        let sanitized = originalName.replacingOccurrences(of: " ", with: "_")
-        return "\(type.folderName)_\(sanitized)_\(Int(timestamp)).usdz"
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalar = originalName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .unicodeScalars
+            .map { allowed.contains($0) ? Character($0) : "_" }
+        let collapsed = String(scalar)
+            .replacingOccurrences(of: "__+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        let safeName = collapsed.isEmpty ? "model" : collapsed
+        return "\(type.folderName)_\(safeName)_\(Int(timestamp)).usdz"
     }
     
     private func getThumbnailURL(for modelURL: URL) -> URL {

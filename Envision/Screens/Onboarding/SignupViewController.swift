@@ -64,7 +64,8 @@ final class SignupViewController: UIViewController {
 
     private let appleButton = SocialButton(
         title: "Sign up with Apple",
-        image: UIImage(systemName: "apple.logo")
+        image: UIImage(systemName: "apple.logo"),
+        iconTintColor: .black
     )
 
     private let googleButton = SocialButton(
@@ -114,7 +115,7 @@ final class SignupViewController: UIViewController {
             nameField, emailField, passwordField, confirmField,
             errorLabel, createButton,
             orLabel, continueLabel,
-            googleButton
+            appleButton, googleButton
         ].forEach { contentView.addSubview($0) }
 
         NSLayoutConstraint.activate([
@@ -156,7 +157,12 @@ final class SignupViewController: UIViewController {
                                         continueLabel.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 4),
                                         continueLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-                                        googleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
+                                        appleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
+                                        appleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        appleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
+
+                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 14),
                                         googleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
                                         googleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
                                         googleButton.heightAnchor.constraint(equalToConstant: 50),

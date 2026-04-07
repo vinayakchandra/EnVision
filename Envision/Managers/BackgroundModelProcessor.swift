@@ -47,11 +47,14 @@ final class BackgroundModelProcessor: @unchecked Sendable {
     
     private var currentJob: ProcessingJob?
     private var currentSession: PhotogrammetrySession?
+    private var preparedInputFolderURL: URL?
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
     
     // Processing state (thread-safe access)
     private let lock = NSLock()
     private var _isProcessing = false
+    private var _isSavingGeneratedModel = false
+    private var _didFinishCurrentRun = false
     private var _currentProgress: Float = 0
     private var _currentStatus: String = ""
     
@@ -95,6 +98,11 @@ final class BackgroundModelProcessor: @unchecked Sendable {
         detailLevel: PhotogrammetrySession.Request.Detail = .reduced,
         completion: @escaping @Sendable (Result<URL, Error>) -> Void
     ) {
+        guard PhotogrammetrySession.isSupported else {
+            completion(.failure(ProcessingError.processingFailed("Object Capture is not supported on this device.")))
+            return
+        }
+
         lock.lock()
         guard !_isProcessing else {
             lock.unlock()
@@ -102,6 +110,8 @@ final class BackgroundModelProcessor: @unchecked Sendable {
             return
         }
         _isProcessing = true
+        _isSavingGeneratedModel = false
+        _didFinishCurrentRun = false
         _currentProgress = 0
         _currentStatus = "Preparing..."
         lock.unlock()
@@ -185,14 +195,23 @@ final class BackgroundModelProcessor: @unchecked Sendable {
             print(" Output: \(outputURL.path)")
             print(" Detail level: \(detailLevel)")
             
-            // Count images
-            let imageCount = (try? FileManager.default.contentsOfDirectory(at: imagesFolder, includingPropertiesForKeys: nil))?
-                .filter { ["jpg", "jpeg", "heic", "png"].contains($0.pathExtension.lowercased()) }
-                .count ?? 0
-            print(" Processing \(imageCount) images")
+            let preparedInputURL: URL
+            let validImageCount: Int
+            do {
+                let prepared = try self.preparePhotogrammetryInput(from: imagesFolder)
+                preparedInputURL = prepared.url
+                validImageCount = prepared.validCount
+                self.preparedInputFolderURL = preparedInputURL
+                print(" Prepared \(prepared.validCount) valid images (skipped \(prepared.skippedCount))")
+            } catch {
+                self.handleFailure(error: error.localizedDescription, completion: completion)
+                return
+            }
+
+            print(" Processing \(validImageCount) images")
             
             guard let session = try? PhotogrammetrySession(
-                input: imagesFolder,
+                input: preparedInputURL,
                 configuration: config
             ) else {
                 self.handleFailure(error: "Failed to create photogrammetry session", completion: completion)
@@ -310,6 +329,14 @@ final class BackgroundModelProcessor: @unchecked Sendable {
     
     // MARK: - Save Model
     private func saveGeneratedModel(_ url: URL, completion: @escaping @Sendable (Result<URL, Error>) -> Void) {
+        lock.lock()
+        if _isSavingGeneratedModel || _didFinishCurrentRun {
+            lock.unlock()
+            return
+        }
+        _isSavingGeneratedModel = true
+        lock.unlock()
+
         SaveManager.shared.saveModel(from: url, type: .furniture, customName: nil) { [weak self] result in
             guard let self = self else { return }
             
@@ -320,9 +347,11 @@ final class BackgroundModelProcessor: @unchecked Sendable {
             self.lock.unlock()
             
             self.currentSession = nil
+            self.cleanupPreparedInputFolder()
             
             switch result {
             case .success(let savedURL):
+                guard self.markRunFinishedIfNeeded() else { return }
                 self.currentJob?.status = .completed
                 self.updateProgress(1.0, status: " Complete!")
                 
@@ -335,6 +364,9 @@ final class BackgroundModelProcessor: @unchecked Sendable {
                 completion(.success(savedURL))
                 
             case .failure(let error):
+                self.lock.lock()
+                self._isSavingGeneratedModel = false
+                self.lock.unlock()
                 self.handleFailure(error: error.localizedDescription, completion: completion)
             }
         }
@@ -342,13 +374,17 @@ final class BackgroundModelProcessor: @unchecked Sendable {
     
     // MARK: - Error Handling
     private func handleFailure(error: String, completion: @escaping @Sendable (Result<URL, Error>) -> Void) {
+        guard markRunFinishedIfNeeded() else { return }
+
         endBackgroundTask()
         
         lock.lock()
         _isProcessing = false
+        _isSavingGeneratedModel = false
         lock.unlock()
         
         currentSession = nil
+        cleanupPreparedInputFolder()
         currentJob?.status = .failed
         currentJob?.errorMessage = error
         
@@ -409,6 +445,7 @@ final class BackgroundModelProcessor: @unchecked Sendable {
     func cancelProcessing() {
         currentSession?.cancel()
         currentSession = nil
+        cleanupPreparedInputFolder()
         
         lock.lock()
         _isProcessing = false
@@ -425,6 +462,81 @@ final class BackgroundModelProcessor: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return (_isProcessing, _currentProgress, _currentStatus)
+    }
+
+    private func markRunFinishedIfNeeded() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if _didFinishCurrentRun { return false }
+        _didFinishCurrentRun = true
+        return true
+    }
+
+    // MARK: - Input Preparation
+    private func preparePhotogrammetryInput(from sourceFolder: URL) throws -> (url: URL, validCount: Int, skippedCount: Int) {
+        let fm = FileManager.default
+        let allFiles = try fm.contentsOfDirectory(at: sourceFolder, includingPropertiesForKeys: nil)
+            .filter { ["jpg", "jpeg", "heic", "png"].contains($0.pathExtension.lowercased()) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        let tempFolder = fm.temporaryDirectory.appendingPathComponent("photogrammetry_input_\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: tempFolder, withIntermediateDirectories: true)
+
+        var validCount = 0
+        var skippedCount = 0
+
+        for fileURL in allFiles {
+            autoreleasepool {
+                guard let image = UIImage(contentsOfFile: fileURL.path) else {
+                    skippedCount += 1
+                    return
+                }
+
+                let destinationURL = tempFolder.appendingPathComponent(String(format: "frame_%04d.jpg", validCount + 1))
+                let normalized = image.downscaledIfNeeded(maxDimension: 2048)
+                guard let jpegData = normalized.jpegData(compressionQuality: 0.95) else {
+                    skippedCount += 1
+                    return
+                }
+                do {
+                    try jpegData.write(to: destinationURL, options: .atomic)
+                    validCount += 1
+                } catch {
+                    skippedCount += 1
+                }
+            }
+        }
+
+        guard validCount >= 10 else {
+            try? fm.removeItem(at: tempFolder)
+            throw ProcessingError.processingFailed("Not enough valid photos for model generation. Try capturing at least 20 clear photos.")
+        }
+
+        return (tempFolder, validCount, skippedCount)
+    }
+
+    private func cleanupPreparedInputFolder() {
+        guard let folder = preparedInputFolderURL else { return }
+        try? FileManager.default.removeItem(at: folder)
+        preparedInputFolderURL = nil
+    }
+}
+
+private extension UIImage {
+    func downscaledIfNeeded(maxDimension: CGFloat) -> UIImage {
+        let longestSide = max(size.width, size.height)
+        guard longestSide > maxDimension, longestSide > 0 else { return self }
+
+        let scaleFactor = maxDimension / longestSide
+        let targetSize = CGSize(width: size.width * scaleFactor, height: size.height * scaleFactor)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
     }
 }
 

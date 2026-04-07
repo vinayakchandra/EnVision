@@ -28,6 +28,9 @@ final class RoomColorManager {
     static let tableTextureKey = "table_texture"
     static let chairTextureKey = "chair_texture"
     static let storageTextureKey = "storage_texture"
+    static let hiddenPrefixesKey = "hidden_entity_prefixes"
+    static let forceWhiteSurfacesKey = "force_white_surfaces"
+    static let enableColorsKey = "enable_colors"
 
     enum TextureSurfaceKind {
         case floor
@@ -38,6 +41,22 @@ final class RoomColorManager {
         case chair
         case storage
     }
+
+    struct SurfaceConfig {
+        let prefix: String
+        let colorKey: String
+        let textureKey: String
+    }
+
+    static let surfaceConfigs: [SurfaceConfig] = [
+        .init(prefix: floorKey, colorKey: floorKey, textureKey: floorTextureKey),
+        .init(prefix: wallKey, colorKey: wallKey, textureKey: wallTextureKey),
+        .init(prefix: doorKey, colorKey: doorKey, textureKey: doorTextureKey),
+        .init(prefix: windowKey, colorKey: windowKey, textureKey: windowTextureKey),
+        .init(prefix: tableKey, colorKey: tableKey, textureKey: tableTextureKey),
+        .init(prefix: chairKey, colorKey: chairKey, textureKey: chairTextureKey),
+        .init(prefix: storageKey, colorKey: storageKey, textureKey: storageTextureKey)
+    ]
 
     struct TextureLibraryItem {
         let name: String
@@ -60,6 +79,19 @@ final class RoomColorManager {
     private var textureCache: [String: TextureResource] = [:]
     
     // MARK: - Public API
+
+    /// Normalizes persisted texture names so sentinels like "None"/"" become nil.
+    func normalizedTextureName(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let lower = trimmed.lowercased()
+        if lower == "none" || lower == "nil" || lower == "null" {
+            return nil
+        }
+        return trimmed
+    }
     
     /// Save a color for a specific element type in a room
     func saveColor(_ color: UIColor, for elementType: String, roomURL: URL) {
@@ -116,22 +148,118 @@ final class RoomColorManager {
         if colorStorage[roomKey] == nil {
             colorStorage[roomKey] = [:]
         }
-        if let name {
-            colorStorage[roomKey]?[key] = name
+
+        if let normalized = normalizedTextureName(name) {
+            colorStorage[roomKey]?[key] = normalized
         } else {
             colorStorage[roomKey]?.removeValue(forKey: key)
         }
         persistColors(for: roomURL)
     }
 
+    func clearTexture(for key: String, roomURL: URL) {
+        saveTextureName(nil, for: key, roomURL: roomURL)
+    }
+
     /// Get saved texture name for an element type, or nil if not set
     func getTextureName(for key: String, roomURL: URL) -> String? {
         let roomKey = roomURL.path
-        if let name = colorStorage[roomKey]?[key] {
+        if let name = normalizedTextureName(colorStorage[roomKey]?[key]) {
             return name
         }
         loadColors(for: roomURL)
-        return colorStorage[roomKey]?[key]
+        return normalizedTextureName(colorStorage[roomKey]?[key])
+    }
+
+    /// Persist hidden semantic entity prefixes (e.g. wall, chair).
+    func saveHiddenEntityPrefixes(_ prefixes: Set<String>, roomURL: URL) {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            colorStorage[roomKey] = [:]
+        }
+
+        if prefixes.isEmpty {
+            colorStorage[roomKey]?.removeValue(forKey: Self.hiddenPrefixesKey)
+        } else {
+            let encoded = prefixes.sorted().joined(separator: ",")
+            colorStorage[roomKey]?[Self.hiddenPrefixesKey] = encoded
+        }
+        persistColors(for: roomURL)
+    }
+
+    /// Load hidden semantic entity prefixes for a room.
+    func getHiddenEntityPrefixes(for roomURL: URL) -> Set<String> {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            loadColors(for: roomURL)
+        }
+        guard let encoded = colorStorage[roomKey]?[Self.hiddenPrefixesKey], !encoded.isEmpty else {
+            return []
+        }
+        return Set(
+            encoded
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    /// Persist set of semantic prefixes that should be rendered as default white.
+    func saveForceWhiteSurfacePrefixes(_ prefixes: Set<String>, roomURL: URL) {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            colorStorage[roomKey] = [:]
+        }
+        if prefixes.isEmpty {
+            colorStorage[roomKey]?.removeValue(forKey: Self.forceWhiteSurfacesKey)
+        } else {
+            colorStorage[roomKey]?[Self.forceWhiteSurfacesKey] = prefixes.sorted().joined(separator: ",")
+        }
+        persistColors(for: roomURL)
+    }
+
+    func getForceWhiteSurfacePrefixes(for roomURL: URL) -> Set<String> {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            loadColors(for: roomURL)
+        }
+        guard let encoded = colorStorage[roomKey]?[Self.forceWhiteSurfacesKey], !encoded.isEmpty else {
+            return []
+        }
+        return Set(
+            encoded
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    /// Persist whether "Enable Colors" is ON for a room.
+    func saveEnableColorsEnabled(_ enabled: Bool, roomURL: URL) {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            colorStorage[roomKey] = [:]
+        }
+
+        if enabled {
+            colorStorage[roomKey]?[Self.enableColorsKey] = "1"
+        } else {
+            colorStorage[roomKey]?.removeValue(forKey: Self.enableColorsKey)
+        }
+        persistColors(for: roomURL)
+    }
+
+    /// Load whether "Enable Colors" is ON for a room. Defaults to false.
+    func isEnableColorsEnabled(for roomURL: URL) -> Bool {
+        let roomKey = roomURL.path
+        if colorStorage[roomKey] == nil {
+            loadColors(for: roomURL)
+        }
+
+        guard let raw = colorStorage[roomKey]?[Self.enableColorsKey] else {
+            return false
+        }
+        return raw == "1" || raw.lowercased() == "true"
     }
 
     // MARK: - Texture Library
@@ -305,11 +433,31 @@ final class RoomColorManager {
     /// Clear all saved colors for a room
     func clearColors(for roomURL: URL) {
         let roomKey = roomURL.path
-        colorStorage[roomKey] = nil
-        
-        // Remove from disk
-        let colorFileURL = colorFileURL(for: roomURL)
-        try? FileManager.default.removeItem(at: colorFileURL)
+        if colorStorage[roomKey] == nil {
+            loadColors(for: roomURL)
+        }
+
+        let colorKeys = [
+            Self.wallKey,
+            Self.floorKey,
+            Self.doorKey,
+            Self.windowKey,
+            Self.tableKey,
+            Self.chairKey,
+            Self.storageKey
+        ]
+
+        for key in colorKeys {
+            colorStorage[roomKey]?.removeValue(forKey: key)
+        }
+
+        if colorStorage[roomKey]?.isEmpty == true {
+            colorStorage[roomKey] = nil
+            let fileURL = colorFileURL(for: roomURL)
+            try? FileManager.default.removeItem(at: fileURL)
+        } else {
+            persistColors(for: roomURL)
+        }
     }
     
     // MARK: - Persistence

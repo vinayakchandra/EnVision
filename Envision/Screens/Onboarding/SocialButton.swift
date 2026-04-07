@@ -4,11 +4,12 @@ final class SocialButton: UIButton {
 
     private let iconView = UIImageView()
 
-    init(title: String, image: UIImage?) {
+    init(title: String, image: UIImage?, iconTintColor: UIColor? = nil) {
         super.init(frame: .zero)
 
         // Icon setup
         iconView.image = image
+        iconView.tintColor = iconTintColor
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.widthAnchor.constraint(equalToConstant: 24).isActive = true

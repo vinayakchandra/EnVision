@@ -103,7 +103,9 @@ final class MeasurementManager: ObservableObject {
     struct Config {
         static let boxColor: UIColor = AppColors.accent
         static let labelBackgroundColor: UIColor = AppColors.accent
-        static let labelTextColor: UIColor = .white
+        static var labelTextColor: UIColor {
+            UITraitCollection.current.userInterfaceStyle == .dark ? .white : .black
+        }
         static let edgeRadius: Float = 0.001      // 1mm edge thickness
         static let cornerRadius: Float = 0.002    // 2mm corner spheres
         static let labelOffset: Float = 0.05      // 5cm label offset from edge
