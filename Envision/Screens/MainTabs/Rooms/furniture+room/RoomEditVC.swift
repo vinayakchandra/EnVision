@@ -31,6 +31,7 @@ final class RoomEditVC: UIViewController {
     private var enableColors = false
     private var isRulerVisible = false
     private var hiddenEntityPrefixes: Set<String> = []
+    private var forceWhiteSurfacePrefixes: Set<String> = []
     private var collisionsEnabled = false
     private var hasGeneratedBaseCollisionShapes = false
     private var collisionGestures: [EntityGestureRecognizer] = []
@@ -91,6 +92,9 @@ final class RoomEditVC: UIViewController {
         setupGestures()
         setupFloatingMenu()
         RoomColorManager.shared.ensureBundledTexturesAvailable()
+        hiddenEntityPrefixes = RoomColorManager.shared.getHiddenEntityPrefixes(for: roomURL)
+        forceWhiteSurfacePrefixes = RoomColorManager.shared.getForceWhiteSurfacePrefixes(for: roomURL)
+        enableColors = RoomColorManager.shared.isEnableColorsEnabled(for: roomURL)
         loadRoom()
     }
     
@@ -100,6 +104,9 @@ final class RoomEditVC: UIViewController {
         cleanupLabels()
         hideRoomRuler()
         disableCollisionFeatures()
+        RoomColorManager.shared.saveHiddenEntityPrefixes(hiddenEntityPrefixes, roomURL: roomURL)
+        RoomColorManager.shared.saveForceWhiteSurfacePrefixes(forceWhiteSurfacePrefixes, roomURL: roomURL)
+        RoomColorManager.shared.saveEnableColorsEnabled(enableColors, roomURL: roomURL)
         saveColoredThumbnail()
     }
 
@@ -386,6 +393,9 @@ final class RoomEditVC: UIViewController {
         ) { [weak self] _ in
             self?.hiddenEntityPrefixes.removeAll()
             self?.applyEntityVisibilityRules()
+            if let self {
+                RoomColorManager.shared.saveHiddenEntityPrefixes(self.hiddenEntityPrefixes, roomURL: self.roomURL)
+            }
             self?.refreshFloatingMenu()
             self?.updateDockButtonStates()
         }
@@ -482,7 +492,11 @@ final class RoomEditVC: UIViewController {
         ) { [weak self] _ in
             guard let self else { return }
             self.enableColors.toggle()
+            RoomColorManager.shared.saveEnableColorsEnabled(self.enableColors, roomURL: self.roomURL)
             if self.enableColors {
+                // Reset "force white" override so color mode can render immediately.
+                self.forceWhiteSurfacePrefixes.removeAll()
+                RoomColorManager.shared.saveForceWhiteSurfacePrefixes(self.forceWhiteSurfacePrefixes, roomURL: self.roomURL)
                 self.saveSemanticColorsAsCurrentTheme()
             }
             if let model = self.displayedModel {
@@ -527,9 +541,19 @@ final class RoomEditVC: UIViewController {
             self.collisionsEnabled = false
             self.disableCollisionFeatures()
             self.hiddenEntityPrefixes.removeAll()
+            self.forceWhiteSurfacePrefixes = Set(RoomColorManager.surfaceConfigs.map { $0.prefix })
             self.labels.values.forEach { $0.isEnabled = false }
+
+            // Clear all texture selections explicitly so reset survives reopen.
+            for config in RoomColorManager.surfaceConfigs {
+                RoomColorManager.shared.clearTexture(for: config.textureKey, roomURL: self.roomURL)
+            }
+
             self.resetRoomAppearanceToPlainWhite()
             self.applyEntityVisibilityRules()
+            RoomColorManager.shared.saveHiddenEntityPrefixes(self.hiddenEntityPrefixes, roomURL: self.roomURL)
+            RoomColorManager.shared.saveForceWhiteSurfacePrefixes(self.forceWhiteSurfacePrefixes, roomURL: self.roomURL)
+            RoomColorManager.shared.saveEnableColorsEnabled(self.enableColors, roomURL: self.roomURL)
             self.refreshFloatingMenu()
             self.updateDockButtonStates()
         }
@@ -556,6 +580,7 @@ final class RoomEditVC: UIViewController {
             hiddenEntityPrefixes.insert(prefix)
         }
         applyEntityVisibilityRules()
+        RoomColorManager.shared.saveHiddenEntityPrefixes(hiddenEntityPrefixes, roomURL: roomURL)
         refreshFloatingMenu()
         updateDockButtonStates()
     }
@@ -716,6 +741,9 @@ final class RoomEditVC: UIViewController {
     }
     
     @objc private func saveAndGoBack() {
+        RoomColorManager.shared.saveHiddenEntityPrefixes(hiddenEntityPrefixes, roomURL: roomURL)
+        RoomColorManager.shared.saveForceWhiteSurfacePrefixes(forceWhiteSurfacePrefixes, roomURL: roomURL)
+        RoomColorManager.shared.saveEnableColorsEnabled(enableColors, roomURL: roomURL)
         // Save thumbnail using ARView snapshot before going back
         saveColoredThumbnail()
         
@@ -872,8 +900,10 @@ final class RoomEditVC: UIViewController {
     // MARK: - Texture Materials
 
     private func textureIsActive(key: String) -> Bool {
-        let name = RoomColorManager.shared.getTextureName(for: key, roomURL: roomURL)
-        return name != nil && name?.isEmpty == false
+        guard let name = RoomColorManager.shared.getTextureName(for: key, roomURL: roomURL) else {
+            return false
+        }
+        return RoomColorManager.shared.textureResource(named: name) != nil
     }
 
     private func makeTexturedMaterial(textureKey: String, fallbackColor: UIColor, roughness: Float) -> RealityKit.Material {
@@ -959,6 +989,19 @@ final class RoomEditVC: UIViewController {
         let tableTextureActive = textureIsActive(key: RoomColorManager.tableTextureKey)
         let chairTextureActive = textureIsActive(key: RoomColorManager.chairTextureKey)
         let storageTextureActive = textureIsActive(key: RoomColorManager.storageTextureKey)
+        
+        func semanticPrefix(for entity: Entity) -> String? {
+            let prefixes = ["wall", "floor", "door", "window", "table", "chair", "storage"]
+            var current: Entity? = entity
+            while let node = current {
+                let lower = node.name.lowercased()
+                if let matched = prefixes.first(where: { lower.contains($0) }) {
+                    return matched
+                }
+                current = node.parent
+            }
+            return nil
+        }
 
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
@@ -968,68 +1011,84 @@ final class RoomEditVC: UIViewController {
             }
 
             let name = model.name.lowercased()
+            let semantic = semanticPrefix(for: model)
 
             if let yOffset = labelYOffset(for: name) {
                 attachLabel(to: model, text: name, yOffset: yOffset)
             }
 
+            if let semantic, forceWhiteSurfacePrefixes.contains(semantic) {
+                model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
+                return
+            }
+
             // 🔴 Enable Colors OFF → saved colours or textures
             guard enableColors else {
-                if name.contains("wall") {
+                if semantic == "wall" {
                     if wallTextureActive {
                         model.model?.materials = [makeWallMaterial()]
                     } else if let color = savedColors[RoomColorManager.wallKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                     } else {
-                        model.model?.materials = [SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)]
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
-                } else if name.contains("floor") {
+                } else if semantic == "floor" {
                     if floorTextureActive {
                         model.model?.materials = [makeFloorMaterial()]
                     } else if let color = savedColors[RoomColorManager.floorKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
                     } else {
-                        model.model?.materials = [makeFloorMaterial()]
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
-                } else if name.contains("door") {
+                } else if semantic == "door" {
                     if doorTextureActive {
                         model.model?.materials = [makeDoorMaterial()]
                     } else if let color = savedColors[RoomColorManager.doorKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
-                } else if name.contains("window") {
+                } else if semantic == "window" {
                     if windowTextureActive {
                         model.model?.materials = [makeWindowMaterial()]
                     } else if let color = savedColors[RoomColorManager.windowKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
-                } else if name.contains("table") {
+                } else if semantic == "table" {
                     if tableTextureActive {
                         model.model?.materials = [makeTableMaterial()]
                     } else if let color = savedColors[RoomColorManager.tableKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
-                } else if name.contains("chair") {
+                } else if semantic == "chair" {
                     if chairTextureActive {
                         model.model?.materials = [makeChairMaterial()]
                     } else if let color = savedColors[RoomColorManager.chairKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
-                } else if name.contains("storage") {
+                } else if semantic == "storage" {
                     if storageTextureActive {
                         model.model?.materials = [makeStorageMaterial()]
                     } else if let color = savedColors[RoomColorManager.storageKey] {
                         model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
+                    } else {
+                        model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                     }
                 } else {
-                    model.model?.materials = [SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)]
+                    model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                 }
                 return
             }
 
             // 🟢 Enable Colors ON → textures win, then saved colours, then semantic defaults
             switch true {
-            case name.contains("wall"):
+            case semantic == "wall":
                 if wallTextureActive {
                     model.model?.materials = [makeWallMaterial()]
                 } else {
@@ -1037,16 +1096,16 @@ final class RoomEditVC: UIViewController {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 }
 
-            case name.contains("floor"):
+            case semantic == "floor":
                 if floorTextureActive {
                     model.model?.materials = [makeFloorMaterial()]
                 } else if let color = savedColors[RoomColorManager.floorKey] {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
                 } else {
-                    model.model?.materials = [makeFloorMaterial()]
+                    model.model?.materials = [SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)]
                 }
 
-            case name.contains("chair"):
+            case semantic == "chair":
                 if chairTextureActive {
                     model.model?.materials = [makeChairMaterial()]
                 } else {
@@ -1054,7 +1113,7 @@ final class RoomEditVC: UIViewController {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 }
 
-            case name.contains("table"):
+            case semantic == "table":
                 if tableTextureActive {
                     model.model?.materials = [makeTableMaterial()]
                 } else {
@@ -1062,7 +1121,7 @@ final class RoomEditVC: UIViewController {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 }
 
-            case name.contains("door"):
+            case semantic == "door":
                 if doorTextureActive {
                     model.model?.materials = [makeDoorMaterial()]
                 } else {
@@ -1070,7 +1129,7 @@ final class RoomEditVC: UIViewController {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 }
 
-            case name.contains("window"):
+            case semantic == "window":
                 if windowTextureActive {
                     model.model?.materials = [makeWindowMaterial()]
                 } else {
@@ -1078,7 +1137,7 @@ final class RoomEditVC: UIViewController {
                     model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
                 }
 
-            case name.contains("storage"):
+            case semantic == "storage":
                 if storageTextureActive {
                     model.model?.materials = [makeStorageMaterial()]
                 } else {
@@ -1131,7 +1190,7 @@ final class RoomEditVC: UIViewController {
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
             model.model?.materials = [
-                SimpleMaterial(color: .white.withAlphaComponent(0.9), roughness: 0.8, isMetallic: false)
+                SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)
             ]
         }
     }
@@ -1172,8 +1231,7 @@ final class RoomEditVC: UIViewController {
         // If a surface texture is active, bulk colour changes must not override it.
         // The user must tap a specific entity directly to explicitly override with colour.
         func textureActive(key: String) -> Bool {
-            let n = RoomColorManager.shared.getTextureName(for: key, roomURL: roomURL)
-            return n != nil && n?.isEmpty == false
+            textureIsActive(key: key)
         }
         if target == .floors && textureActive(key: RoomColorManager.floorTextureKey) { return }
         if target == .walls  && textureActive(key: RoomColorManager.wallTextureKey)  { return }
@@ -1182,6 +1240,10 @@ final class RoomEditVC: UIViewController {
         if target == .tables && textureActive(key: RoomColorManager.tableTextureKey) { return }
         if target == .chairs && textureActive(key: RoomColorManager.chairTextureKey) { return }
         if target == .storage && textureActive(key: RoomColorManager.storageTextureKey) { return }
+
+        // Bulk color edits should also clear any forced-white override for that target.
+        forceWhiteSurfacePrefixes.remove(prefix)
+        RoomColorManager.shared.saveForceWhiteSurfacePrefixes(forceWhiteSurfacePrefixes, roomURL: roomURL)
 
         root.visit {
             guard let model = $0 as? ModelEntity else { return }
@@ -1315,14 +1377,30 @@ final class RoomEditVC: UIViewController {
         ])
     }
 
+    private func isDescendant(_ entity: Entity, of parent: Entity) -> Bool {
+        var current = entity.parent
+        while let node = current {
+            if node == parent { return true }
+            current = node.parent
+        }
+        return false
+    }
+
     // MARK: - Selection
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: arView)
+        if let tappedEntity = arView.entity(at: location) {
+            for furniture in placedFurniture where tappedEntity == furniture || isDescendant(tappedEntity, of: furniture) {
+                showControls(for: furniture)
+                return
+            }
+        }
+
         guard isParametricModel else { return }
         guard !collisionsEnabled else { return }
         if let root = displayedModel {
             ensureBaseCollisionShapesGenerated(for: root)
         }
-        let location = gesture.location(in: arView)
         selectedModel = arView.entity(at: location) as? ModelEntity
         guard selectedModel != nil else { return }
         presentColorPicker()
@@ -1376,14 +1454,15 @@ extension RoomEditVC: UIColorPickerViewControllerDelegate {
                 if let textureKey = textureKey(forElementType: elementType) {
                     RoomColorManager.shared.saveTextureName(nil, for: textureKey, roomURL: roomURL)
                 }
+                forceWhiteSurfacePrefixes.remove(elementType)
+                RoomColorManager.shared.saveForceWhiteSurfacePrefixes(forceWhiteSurfacePrefixes, roomURL: roomURL)
             }
 
         default:
             setColor(for: colorTarget, color: selectedColor)
             // Only persist the colour when no texture is guarding this surface type.
             func hasTexture(key: String) -> Bool {
-                let n = RoomColorManager.shared.getTextureName(for: key, roomURL: roomURL)
-                return n != nil && n?.isEmpty == false
+                textureIsActive(key: key)
             }
             let blocked = (colorTarget == .floors && hasTexture(key: RoomColorManager.floorTextureKey))
                        || (colorTarget == .walls  && hasTexture(key: RoomColorManager.wallTextureKey))
@@ -1394,6 +1473,8 @@ extension RoomEditVC: UIColorPickerViewControllerDelegate {
                        || (colorTarget == .storage && hasTexture(key: RoomColorManager.storageTextureKey))
             if !blocked, let elementType = colorTargetToElementType(colorTarget) {
                 RoomColorManager.shared.saveColor(selectedColor, for: elementType, roomURL: roomURL)
+                forceWhiteSurfacePrefixes.remove(elementType)
+                RoomColorManager.shared.saveForceWhiteSurfacePrefixes(forceWhiteSurfacePrefixes, roomURL: roomURL)
             }
         }
     }
@@ -1449,21 +1530,94 @@ extension RoomEditVC: UIColorPickerViewControllerDelegate {
 
 // MARK: - TexturePickerDelegate
 extension RoomEditVC: TexturePickerDelegate {
+    private func semanticPrefix(for entity: Entity) -> String? {
+        let prefixes = ["wall", "floor", "door", "window", "table", "chair", "storage"]
+        var current: Entity? = entity
+        while let node = current {
+            let lower = node.name.lowercased()
+            if let matched = prefixes.first(where: { lower.contains($0) }) {
+                return matched
+            }
+            current = node.parent
+        }
+        return nil
+    }
+
+    private func applyDefaultWhiteForSurface(_ surface: TextureSurface) {
+        guard let root = displayedModel else { return }
+
+        let targetPrefix: String
+        switch surface {
+        case .floor: targetPrefix = "floor"
+        case .wall: targetPrefix = "wall"
+        case .door: targetPrefix = "door"
+        case .window: targetPrefix = "window"
+        case .table: targetPrefix = "table"
+        case .chair: targetPrefix = "chair"
+        case .storage: targetPrefix = "storage"
+        }
+
+        root.visit { entity in
+            guard let model = entity as? ModelEntity else { return }
+            guard semanticPrefix(for: model) == targetPrefix else { return }
+            model.model?.materials = [
+                SimpleMaterial(color: .white, roughness: 0.8, isMetallic: false)
+            ]
+        }
+    }
+
     func texturePicker(_ picker: TexturePickerViewController,
                        didSelect option: TextureOption,
                        for surface: TextureSurface) {
-        let nameToSave: String? = option.name.isEmpty ? nil : option.name
+        let nameToSave: String? = RoomColorManager.shared.normalizedTextureName(option.name)
+        let targetPrefix: String
         let key: String
         switch surface {
-        case .floor: key = RoomColorManager.floorTextureKey
-        case .wall: key = RoomColorManager.wallTextureKey
-        case .door: key = RoomColorManager.doorTextureKey
-        case .window: key = RoomColorManager.windowTextureKey
-        case .table: key = RoomColorManager.tableTextureKey
-        case .chair: key = RoomColorManager.chairTextureKey
-        case .storage: key = RoomColorManager.storageTextureKey
+        case .floor:
+            key = RoomColorManager.floorTextureKey
+            targetPrefix = RoomColorManager.floorKey
+        case .wall:
+            key = RoomColorManager.wallTextureKey
+            targetPrefix = RoomColorManager.wallKey
+        case .door:
+            key = RoomColorManager.doorTextureKey
+            targetPrefix = RoomColorManager.doorKey
+        case .window:
+            key = RoomColorManager.windowTextureKey
+            targetPrefix = RoomColorManager.windowKey
+        case .table:
+            key = RoomColorManager.tableTextureKey
+            targetPrefix = RoomColorManager.tableKey
+        case .chair:
+            key = RoomColorManager.chairTextureKey
+            targetPrefix = RoomColorManager.chairKey
+        case .storage:
+            key = RoomColorManager.storageTextureKey
+            targetPrefix = RoomColorManager.storageKey
         }
-        RoomColorManager.shared.saveTextureName(nameToSave, for: key, roomURL: roomURL)
+
+        // Explicit product rule:
+        // Choosing "None" for a texture should reset that surface to default white.
+        if nameToSave == nil {
+            RoomColorManager.shared.clearTexture(for: key, roomURL: roomURL)
+            forceWhiteSurfacePrefixes.insert(targetPrefix)
+            let colorKey: String
+            switch surface {
+            case .floor: colorKey = RoomColorManager.floorKey
+            case .wall: colorKey = RoomColorManager.wallKey
+            case .door: colorKey = RoomColorManager.doorKey
+            case .window: colorKey = RoomColorManager.windowKey
+            case .table: colorKey = RoomColorManager.tableKey
+            case .chair: colorKey = RoomColorManager.chairKey
+            case .storage: colorKey = RoomColorManager.storageKey
+            }
+            RoomColorManager.shared.saveColor(.white, for: colorKey, roomURL: roomURL)
+            applyDefaultWhiteForSurface(surface)
+        } else {
+            RoomColorManager.shared.saveTextureName(nameToSave, for: key, roomURL: roomURL)
+            forceWhiteSurfacePrefixes.remove(targetPrefix)
+        }
+        RoomColorManager.shared.saveForceWhiteSurfacePrefixes(forceWhiteSurfacePrefixes, roomURL: roomURL)
 
         if let root = displayedModel {
             applyMaterialRules(to: root)

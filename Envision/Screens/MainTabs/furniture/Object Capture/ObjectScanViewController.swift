@@ -26,6 +26,12 @@ final class ObjectScanViewController: UIViewController {
     private var images: [URL] = []
 
     // MARK: - UI Elements
+    private let instructionBackdropView: UIVisualEffectView = {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.alpha = 0
+        return view
+    }()
     private let instructionCard = UIView()
     private let instructionIconView = UIImageView()
     private let instructionTitle = UILabel()
@@ -305,7 +311,8 @@ final class ObjectScanViewController: UIViewController {
             instructionDotViews.append(dot)
         }
 
-        view.addSubview(instructionCard)
+        view.addSubview(instructionBackdropView)
+        instructionBackdropView.contentView.addSubview(instructionCard)
         instructionCard.addSubview(instructionIconView)
         instructionCard.addSubview(instructionTitle)
         instructionCard.addSubview(instructionDetails)
@@ -314,9 +321,14 @@ final class ObjectScanViewController: UIViewController {
         instructionCard.addSubview(instructionSkipButton)
 
         NSLayoutConstraint.activate([
-            instructionCard.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            instructionCard.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            instructionCard.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.88),
+            instructionBackdropView.topAnchor.constraint(equalTo: view.topAnchor),
+            instructionBackdropView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            instructionBackdropView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            instructionBackdropView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            instructionCard.centerXAnchor.constraint(equalTo: instructionBackdropView.contentView.centerXAnchor),
+            instructionCard.centerYAnchor.constraint(equalTo: instructionBackdropView.contentView.centerYAnchor),
+            instructionCard.widthAnchor.constraint(equalTo: instructionBackdropView.contentView.widthAnchor, multiplier: 0.88),
 
             instructionIconView.topAnchor.constraint(equalTo: instructionCard.topAnchor, constant: 32),
             instructionIconView.centerXAnchor.constraint(equalTo: instructionCard.centerXAnchor),
@@ -385,12 +397,14 @@ final class ObjectScanViewController: UIViewController {
 
     private func showInstructionCard() {
         UIView.animate(withDuration: 0.4) {
+            self.instructionBackdropView.alpha = 1
             self.instructionCard.alpha = 1
         }
     }
 
     @objc private func hideInstructionCard() {
         UIView.animate(withDuration: 0.3) {
+            self.instructionBackdropView.alpha = 0
             self.instructionCard.alpha = 0
         }
 
@@ -437,7 +451,7 @@ final class ObjectScanViewController: UIViewController {
     }
 
     private func takePhoto() {
-        let settings = AVCapturePhotoSettings()
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
     
@@ -504,8 +518,18 @@ extension ObjectScanViewController: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
-
-        guard let data = photo.fileDataRepresentation() else { return }
+        if let error {
+            print(" Photo capture error: \(error.localizedDescription)")
+            return
+        }
+        guard let rawData = photo.fileDataRepresentation() else { return }
+        // Normalize every captured sample to actual JPEG bytes for Object Capture stability.
+        let data: Data
+        if let image = UIImage(data: rawData), let jpeg = image.jpegData(compressionQuality: 0.95) {
+            data = jpeg
+        } else {
+            data = rawData
+        }
 
         let filename = "IMG_\(String(format: "%04d", images.count + 1)).jpg"
         let url = tempFolderURL.appendingPathComponent(filename)

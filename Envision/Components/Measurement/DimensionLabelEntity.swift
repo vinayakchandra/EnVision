@@ -44,7 +44,9 @@ final class DimensionLabelEntity: Entity {
         static let extrusionDepth: Float = 0.001
         static let backgroundPadding: Float = 0.005
         static let backgroundCornerRadius: Float = 0.003
-        static let textColor: UIColor = .white
+        static var textColor: UIColor {
+            UITraitCollection.current.userInterfaceStyle == .dark ? .white : .black
+        }
         static let backgroundColor: UIColor = AppColors.accent
     }
     

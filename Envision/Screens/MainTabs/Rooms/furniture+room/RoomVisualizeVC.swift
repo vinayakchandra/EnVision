@@ -50,9 +50,14 @@ final class RoomVisualizeVC: UIViewController {
     }()
 
     private var controlPanel: FurnitureControlPanel?
+    private var furnitureSelectionTapGesture: UITapGestureRecognizer?
     private var loadingOverlay: UIVisualEffectView?
     private var loadingIndicator: UIActivityIndicatorView?
     private var loadingLabel: UILabel?
+    
+    private var measurementTextColor: UIColor {
+        traitCollection.userInterfaceStyle == .dark ? .white : .black
+    }
 
     // MARK: - Init
     init(roomURL: URL) {
@@ -299,22 +304,17 @@ final class RoomVisualizeVC: UIViewController {
     
     private func showMeasurementOptions() {
         let alert = UIAlertController(title: "Measurement Mode", message: "Choose what to measure", preferredStyle: .actionSheet)
-        
-        alert.addAction(UIAlertAction(title: "📏 Point to Point", style: .default) { [weak self] _ in
-            self?.enterMeasurementMode(type: .pointToPoint)
-        })
-        
-        alert.addAction(UIAlertAction(title: "📦 Room Dimensions", style: .default) { [weak self] _ in
+
+        alert.addAction(UIAlertAction(title: "Room Dimensions", style: .default) { [weak self] _ in
             self?.enterMeasurementMode(type: .room)
         })
         
         if !placedFurniture.isEmpty {
-            alert.addAction(UIAlertAction(title: "🪑 Furniture Dimensions", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "Furniture Dimensions", style: .default) { [weak self] _ in
                 self?.enterMeasurementMode(type: .furniture)
             })
             
-            // NEW: Proximity measurement option
-            alert.addAction(UIAlertAction(title: "📐 Furniture Proximity (Auto)", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "Furniture Proximity (Auto)", style: .default) { [weak self] _ in
                 self?.enterMeasurementMode(type: .proximity)
             })
         }
@@ -452,7 +452,7 @@ final class RoomVisualizeVC: UIViewController {
         D: \(scaleManager.formatRealWorldDistance(realDimensions.z))
         """
         toast.font = .systemFont(ofSize: 14, weight: .medium)
-        toast.textColor = .white
+        toast.textColor = measurementTextColor
         toast.backgroundColor = AppColors.accent.withAlphaComponent(0.95)
         toast.textAlignment = .center
         toast.layer.cornerRadius = 12
@@ -474,7 +474,7 @@ final class RoomVisualizeVC: UIViewController {
         let toast = UILabel()
         toast.text = "Tap a furniture item to see dimensions"
         toast.font = .systemFont(ofSize: 15, weight: .medium)
-        toast.textColor = .white
+        toast.textColor = measurementTextColor
         toast.backgroundColor = AppColors.accent.withAlphaComponent(0.9)
         toast.textAlignment = .center
         toast.layer.cornerRadius = 12
@@ -575,7 +575,7 @@ final class RoomVisualizeVC: UIViewController {
         D: \(scaleManager.formatRealWorldDistance(realDimensions.z))
         """
         toast.font = .systemFont(ofSize: 14, weight: .medium)
-        toast.textColor = .white
+        toast.textColor = measurementTextColor
         toast.backgroundColor = AppColors.accent.withAlphaComponent(0.95)
         toast.textAlignment = .center
         toast.layer.cornerRadius = 12
@@ -633,7 +633,7 @@ final class RoomVisualizeVC: UIViewController {
         let toast = UILabel()
         toast.text = "Tap furniture to see distances to walls & objects"
         toast.font = .systemFont(ofSize: 15, weight: .medium)
-        toast.textColor = .white
+        toast.textColor = measurementTextColor
         toast.backgroundColor = AppColors.accent.withAlphaComponent(0.9)
         toast.textAlignment = .center
         toast.layer.cornerRadius = 12
@@ -895,7 +895,7 @@ final class RoomVisualizeVC: UIViewController {
         }
         
         label.font = .systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .white
+        label.textColor = measurementTextColor
         label.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.95)
         label.textAlignment = .center
         label.layer.cornerRadius = 12
@@ -932,6 +932,22 @@ final class RoomVisualizeVC: UIViewController {
     private func setupGestures() {
         arView.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handlePan)))
         arView.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(handlePinch)))
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleFurnitureSelectionTap(_:)))
+        arView.addGestureRecognizer(tap)
+        furnitureSelectionTapGesture = tap
+    }
+
+    @objc private func handleFurnitureSelectionTap(_ gesture: UITapGestureRecognizer) {
+        guard !isMeasuringMode else { return }
+        let location = gesture.location(in: arView)
+        guard let tappedEntity = arView.entity(at: location) else { return }
+
+        for furniture in placedFurniture where tappedEntity == furniture || isDescendant(tappedEntity, of: furniture) {
+            showControls(for: furniture)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            return
+        }
     }
 
     // MARK: - Loading
@@ -971,6 +987,7 @@ final class RoomVisualizeVC: UIViewController {
         
         // Apply saved colors from RoomColorManager
         applySavedColors(to: clone)
+        applyHiddenEntityVisibility(to: clone)
 
         let anchor = AnchorEntity(world: .zero)
         anchor.addChild(clone)
@@ -981,19 +998,28 @@ final class RoomVisualizeVC: UIViewController {
     
     private func applySavedColors(to root: ModelEntity) {
         let savedColors = RoomColorManager.shared.getAllColors(for: roomURL)
-        let textureNames: [String: String] = [
-            RoomColorManager.floorTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.floorTextureKey, roomURL: roomURL) ?? "",
-            RoomColorManager.wallTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.wallTextureKey, roomURL: roomURL) ?? "",
-            RoomColorManager.doorTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.doorTextureKey, roomURL: roomURL) ?? "",
-            RoomColorManager.windowTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.windowTextureKey, roomURL: roomURL) ?? "",
-            RoomColorManager.tableTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.tableTextureKey, roomURL: roomURL) ?? "",
-            RoomColorManager.chairTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.chairTextureKey, roomURL: roomURL) ?? "",
-            RoomColorManager.storageTextureKey: RoomColorManager.shared.getTextureName(for: RoomColorManager.storageTextureKey, roomURL: roomURL) ?? ""
-        ]
+        let forceWhiteSurfacePrefixes = RoomColorManager.shared.getForceWhiteSurfacePrefixes(for: roomURL)
+        
+        func semanticPrefix(for entity: Entity) -> String? {
+            let prefixes = ["wall", "floor", "door", "window", "table", "chair", "storage"]
+            var current: Entity? = entity
+            while let node = current {
+                let lower = node.name.lowercased()
+                if let matched = prefixes.first(where: { lower.contains($0) }) {
+                    return matched
+                }
+                current = node.parent
+            }
+            return nil
+        }
 
         func pbr(textureKey: String, roughness: Float) -> RealityKit.Material? {
-            guard let name = textureNames[textureKey], !name.isEmpty else { return nil }
-            guard let texture = RoomColorManager.shared.textureResource(named: name) else { return nil }
+            guard let name = RoomColorManager.shared.getTextureName(for: textureKey, roomURL: roomURL) else {
+                return nil
+            }
+            guard let texture = RoomColorManager.shared.textureResource(named: name) else {
+                return nil
+            }
             var mat = PhysicallyBasedMaterial()
             mat.baseColor = .init(texture: .init(texture))
             mat.roughness = .init(floatLiteral: roughness)
@@ -1001,52 +1027,78 @@ final class RoomVisualizeVC: UIViewController {
             return mat
         }
 
+        func resolvedMaterial(
+            textureKey: String,
+            colorKey: String,
+            defaultColor: UIColor,
+            roughness: Float
+        ) -> Material {
+            if let textured = pbr(textureKey: textureKey, roughness: roughness) {
+                return textured
+            }
+
+            let color = savedColors[colorKey] ?? defaultColor
+            return SimpleMaterial(color: color, roughness: .float(roughness), isMetallic: false)
+        }
+
         root.visit { entity in
             guard let model = entity as? ModelEntity else { return }
-            let name = model.name.lowercased()
+            let semantic = semanticPrefix(for: model)
+            
+            if let semantic, forceWhiteSurfacePrefixes.contains(semantic) {
+                model.model?.materials = [SimpleMaterial(color: .white, roughness: .float(0.8), isMetallic: false)]
+                return
+            }
 
-            if name.contains("wall") {
-                if let mat = pbr(textureKey: RoomColorManager.wallTextureKey, roughness: 0.75) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.wallKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                }
-            } else if name.contains("floor") {
-                if let mat = pbr(textureKey: RoomColorManager.floorTextureKey, roughness: 0.85) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.floorKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.6, isMetallic: false)]
-                }
-            } else if name.contains("door") {
-                if let mat = pbr(textureKey: RoomColorManager.doorTextureKey, roughness: 0.4) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.doorKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                }
-            } else if name.contains("window") {
-                if let mat = pbr(textureKey: RoomColorManager.windowTextureKey, roughness: 0.4) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.windowKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                }
-            } else if name.contains("table") {
-                if let mat = pbr(textureKey: RoomColorManager.tableTextureKey, roughness: 0.4) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.tableKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                }
-            } else if name.contains("chair") {
-                if let mat = pbr(textureKey: RoomColorManager.chairTextureKey, roughness: 0.4) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.chairKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                }
-            } else if name.contains("storage") {
-                if let mat = pbr(textureKey: RoomColorManager.storageTextureKey, roughness: 0.4) {
-                    model.model?.materials = [mat]
-                } else if let color = savedColors[RoomColorManager.storageKey] {
-                    model.model?.materials = [SimpleMaterial(color: color, roughness: 0.4, isMetallic: false)]
-                }
+            if semantic == "wall" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.wallTextureKey,
+                    colorKey: RoomColorManager.wallKey,
+                    defaultColor: .white,
+                    roughness: 0.75
+                )]
+            } else if semantic == "floor" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.floorTextureKey,
+                    colorKey: RoomColorManager.floorKey,
+                    defaultColor: .white,
+                    roughness: 0.85
+                )]
+            } else if semantic == "door" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.doorTextureKey,
+                    colorKey: RoomColorManager.doorKey,
+                    defaultColor: .white,
+                    roughness: 0.4
+                )]
+            } else if semantic == "window" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.windowTextureKey,
+                    colorKey: RoomColorManager.windowKey,
+                    defaultColor: .white,
+                    roughness: 0.4
+                )]
+            } else if semantic == "table" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.tableTextureKey,
+                    colorKey: RoomColorManager.tableKey,
+                    defaultColor: .white,
+                    roughness: 0.4
+                )]
+            } else if semantic == "chair" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.chairTextureKey,
+                    colorKey: RoomColorManager.chairKey,
+                    defaultColor: .white,
+                    roughness: 0.4
+                )]
+            } else if semantic == "storage" {
+                model.model?.materials = [resolvedMaterial(
+                    textureKey: RoomColorManager.storageTextureKey,
+                    colorKey: RoomColorManager.storageKey,
+                    defaultColor: .white,
+                    roughness: 0.4
+                )]
             }
         }
     }
@@ -1055,6 +1107,19 @@ final class RoomVisualizeVC: UIViewController {
         // Use RealWorldScaleManager to properly track the scale
         let scaleFactor = scaleManager.setupRoomScale(for: model)
         model.scale = .init(repeating: scaleFactor)
+    }
+
+    private func applyHiddenEntityVisibility(to root: ModelEntity) {
+        let hiddenPrefixes = RoomColorManager.shared.getHiddenEntityPrefixes(for: roomURL)
+        guard !hiddenPrefixes.isEmpty else { return }
+
+        root.visit { entity in
+            guard let model = entity as? ModelEntity else { return }
+            let name = model.name.lowercased()
+            let prefixes = ["wall", "floor", "door", "window", "table", "chair", "storage"]
+            guard let matched = prefixes.first(where: { name.starts(with: $0) }) else { return }
+            model.isEnabled = !hiddenPrefixes.contains(matched)
+        }
     }
 
     // MARK: - Camera

@@ -103,6 +103,10 @@ final class ProximityMeasurementSystem {
     // MARK: - Active Visualizations
     private var activeIndicators: [Entity] = []
     private var activeLabels: [UIView] = []
+
+    private var measurementTextColor: UIColor {
+        UITraitCollection.current.userInterfaceStyle == .dark ? .white : .black
+    }
     
     // MARK: - Calculate Proximity Measurements
     
@@ -414,7 +418,7 @@ final class ProximityMeasurementSystem {
             lineBreakMode: .byTruncatingTail
         )
         
-        let labelMaterial = SimpleMaterial(color: .white, roughness: 0.3, isMetallic: false)
+        let labelMaterial = SimpleMaterial(color: measurementTextColor, roughness: 0.3, isMetallic: false)
         let label = ModelEntity(mesh: labelMesh, materials: [labelMaterial])
         
         // Position label at midpoint, offset perpendicular to the line

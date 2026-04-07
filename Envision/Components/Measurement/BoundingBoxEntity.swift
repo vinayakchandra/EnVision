@@ -20,6 +20,10 @@ final class BoundingBoxEntity: Entity {
     private let boundingBox: BoundingBox
     private let color: UIColor
     private let unit: MeasurementUnit
+
+    private static var measurementTextColor: UIColor {
+        UITraitCollection.current.userInterfaceStyle == .dark ? .white : .black
+    }
     
     // MARK: - Configuration
     
@@ -214,7 +218,7 @@ final class BoundingBoxEntity: Entity {
             lineBreakMode: .byTruncatingTail
         )
         
-        let material = SimpleMaterial(color: .white, roughness: 0.3, isMetallic: false)
+        let material = SimpleMaterial(color: Self.measurementTextColor, roughness: 0.3, isMetallic: false)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.position = position
         entity.scale = SIMD3<Float>(repeating: Config.labelScale)

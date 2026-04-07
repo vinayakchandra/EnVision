@@ -7,9 +7,10 @@
 
 import UIKit
 import GoogleSignIn
+import UserNotifications
 
 
-class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+class SceneDelegate: UIResponder, UIWindowSceneDelegate, UNUserNotificationCenterDelegate {
     
     var window: UIWindow?
     
@@ -22,6 +23,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = SplashViewController()
         self.window = window
         window.makeKeyAndVisible()
+        UNUserNotificationCenter.current().delegate = self
         
         let style: UIUserInterfaceStyle
 
@@ -104,9 +106,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
     }
-    
-    
-    
-    
-    
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .badge])
+    }
 }

@@ -54,7 +54,11 @@ final class LoginViewController: UIViewController {
         return btn
     }()
 
-    private let appleButton = SocialButton(title: "Sign in with Apple", image: UIImage(systemName: "apple.logo"))
+    private let appleButton = SocialButton(
+        title: "Sign in with Apple",
+        image: UIImage(systemName: "apple.logo"),
+        iconTintColor: .black
+    )
     private let googleButton = SocialButton(title: "Sign in with Google", image: UIImage(named: "google_icon"))
 
     // MARK: - Lifecycle
@@ -108,7 +112,7 @@ final class LoginViewController: UIViewController {
 
     private func setupUI() {
         [logoImageView, titleLabel, emailField, passwordField, errorLabel, continueButton,
-         forgotPasswordButton, createAccountButton, googleButton
+         forgotPasswordButton, createAccountButton, appleButton, googleButton
         ].forEach { contentView.addSubview($0) }
         NSLayoutConstraint.activate([
                                         logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
@@ -141,7 +145,12 @@ final class LoginViewController: UIViewController {
                                         createAccountButton.centerYAnchor.constraint(equalTo: forgotPasswordButton.centerYAnchor),
                                         createAccountButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
 
-                                        googleButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
+                                        appleButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
+                                        appleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
+                                        appleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
+                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
+
+                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 14),
                                         googleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
                                         googleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
                                         googleButton.heightAnchor.constraint(equalToConstant: 50),
