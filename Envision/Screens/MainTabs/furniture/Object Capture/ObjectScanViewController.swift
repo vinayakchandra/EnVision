@@ -77,13 +77,34 @@ final class ObjectScanViewController: UIViewController {
 
     private let stopButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.setTitle("Finish Capture", for: .normal)
+        btn.setTitle("Start Capture", for: .normal)
         btn.titleLabel?.font = .boldSystemFont(ofSize: 18)
         btn.backgroundColor = .systemBlue
         btn.tintColor = .white
         btn.layer.cornerRadius = 12
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
+    }()
+
+    private let helpButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.setImage(UIImage(systemName: "questionmark.circle"), for: .normal)
+        btn.tintColor = .white
+        btn.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        btn.layer.cornerRadius = 20
+        btn.clipsToBounds = true
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }()
+
+    private let helpLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.font = .systemFont(ofSize: 12, weight: .semibold)
+        lbl.textColor = .white
+        lbl.text = "Help"
+        lbl.textAlignment = .center
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
     }()
 
     private let counterLabel: UILabel = {
@@ -110,7 +131,7 @@ final class ObjectScanViewController: UIViewController {
         let lbl = UILabel()
         lbl.font = .systemFont(ofSize: 13, weight: .semibold)
         lbl.textColor = .systemYellow
-        lbl.text = "Keep capturing..."
+        lbl.text = "Ready to scan"
         lbl.textAlignment = .center
         lbl.layer.cornerRadius = 12
         lbl.backgroundColor = UIColor.black.withAlphaComponent(0.5)
@@ -121,20 +142,29 @@ final class ObjectScanViewController: UIViewController {
     
     private let guidanceLabel: UILabel = {
         let lbl = UILabel()
-        lbl.font = .systemFont(ofSize: 15, weight: .medium)
+        lbl.font = .systemFont(ofSize: 15, weight: .semibold)
         lbl.textColor = .white
-        lbl.text = "Walk slowly around the object"
+        lbl.text = "Open Help (?) for tips"
         lbl.textAlignment = .center
         lbl.numberOfLines = 2
-        lbl.layer.cornerRadius = 12
-        lbl.backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        lbl.clipsToBounds = true
         lbl.translatesAutoresizingMaskIntoConstraints = false
         return lbl
     }()
 
+    private let guidanceContainer: UIVisualEffectView = {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.layer.cornerRadius = 18
+        view.layer.cornerCurve = .continuous
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor.white.withAlphaComponent(0.16).cgColor
+        view.clipsToBounds = true
+        return view
+    }()
+
     private var isFlashOn = false
     private var captureStartTime: Date?
+    private var isCaptureRunning = false
 
     // MARK: - Init
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -158,7 +188,7 @@ final class ObjectScanViewController: UIViewController {
         setupInstructionCard()
 
         session.startRunning()
-        showInstructionCard()
+        applyIdleCaptureState()
     }
 
     // MARK: - Folder Setup
@@ -235,16 +265,36 @@ final class ObjectScanViewController: UIViewController {
             stopButton.widthAnchor.constraint(equalToConstant: 200),
             stopButton.heightAnchor.constraint(equalToConstant: 56)
         ])
-        stopButton.addTarget(self, action: #selector(stopCapture), for: .touchUpInside)
-        
-        // Guidance Label (ADD AFTER stopButton so constraint can reference it)
-        view.addSubview(guidanceLabel)
+        stopButton.addTarget(self, action: #selector(handleCaptureActionButton), for: .touchUpInside)
+
+        let helpStack = UIStackView(arrangedSubviews: [helpButton, helpLabel])
+        helpStack.axis = .vertical
+        helpStack.spacing = 4
+        helpStack.alignment = .center
+        helpStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(helpStack)
         NSLayoutConstraint.activate([
-            guidanceLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            guidanceLabel.bottomAnchor.constraint(equalTo: stopButton.topAnchor, constant: -20),
-            guidanceLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
-            guidanceLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
-            guidanceLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            helpStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            helpStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            helpButton.widthAnchor.constraint(equalToConstant: 40),
+            helpButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
+        helpButton.addTarget(self, action: #selector(showTipsFromHelp), for: .touchUpInside)
+        
+        // Guidance Card
+        view.addSubview(guidanceContainer)
+        guidanceContainer.contentView.addSubview(guidanceLabel)
+        NSLayoutConstraint.activate([
+            guidanceContainer.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            guidanceContainer.bottomAnchor.constraint(equalTo: stopButton.topAnchor, constant: -18),
+            guidanceContainer.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 36),
+            guidanceContainer.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -36),
+            guidanceContainer.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
+
+            guidanceLabel.topAnchor.constraint(equalTo: guidanceContainer.contentView.topAnchor, constant: 12),
+            guidanceLabel.leadingAnchor.constraint(equalTo: guidanceContainer.contentView.leadingAnchor, constant: 16),
+            guidanceLabel.trailingAnchor.constraint(equalTo: guidanceContainer.contentView.trailingAnchor, constant: -16),
+            guidanceLabel.bottomAnchor.constraint(equalTo: guidanceContainer.contentView.bottomAnchor, constant: -12)
         ])
     }
 
@@ -357,6 +407,9 @@ final class ObjectScanViewController: UIViewController {
         ])
 
         instructionCard.alpha = 0
+        instructionBackdropView.alpha = 0
+        instructionBackdropView.isHidden = true
+        instructionBackdropView.isUserInteractionEnabled = false
         updateInstructionContent(animated: false)
     }
 
@@ -371,7 +424,7 @@ final class ObjectScanViewController: UIViewController {
             )
             self.instructionTitle.text = step.title
             self.instructionDetails.text = step.detail
-            self.instructionNextButton.setTitle(isLast ? "Start Scanning" : "Next", for: .normal)
+            self.instructionNextButton.setTitle(isLast ? "Done" : "Next", for: .normal)
 
             for (i, dot) in self.instructionDotViews.enumerated() {
                 UIView.animate(withDuration: animated ? 0.25 : 0) {
@@ -396,6 +449,10 @@ final class ObjectScanViewController: UIViewController {
     }
 
     private func showInstructionCard() {
+        currentInstructionStep = 0
+        updateInstructionContent(animated: false)
+        instructionBackdropView.isHidden = false
+        instructionBackdropView.isUserInteractionEnabled = true
         UIView.animate(withDuration: 0.4) {
             self.instructionBackdropView.alpha = 1
             self.instructionCard.alpha = 1
@@ -406,10 +463,10 @@ final class ObjectScanViewController: UIViewController {
         UIView.animate(withDuration: 0.3) {
             self.instructionBackdropView.alpha = 0
             self.instructionCard.alpha = 0
+        } completion: { _ in
+            self.instructionBackdropView.isHidden = true
+            self.instructionBackdropView.isUserInteractionEnabled = false
         }
-
-        captureStartTime = Date()
-        startAutoCapture()
     }
 
     @objc private func instructionNextTapped() {
@@ -419,6 +476,10 @@ final class ObjectScanViewController: UIViewController {
         } else {
             hideInstructionCard()
         }
+    }
+
+    @objc private func showTipsFromHelp() {
+        showInstructionCard()
     }
 
     // MARK: - Flashlight
@@ -442,6 +503,7 @@ final class ObjectScanViewController: UIViewController {
 
     // MARK: - Auto Capture
     private func startAutoCapture() {
+        guard captureTimer == nil else { return }
         // Capture every 0.4 seconds for good overlap between photos
         // Faster capture = more photos = better reconstruction but longer processing
         // 0.4s is a good balance for walking pace around object
@@ -457,6 +519,7 @@ final class ObjectScanViewController: UIViewController {
     
     // MARK: - Quality Feedback
     private func updateQualityIndicator() {
+        guard isCaptureRunning else { return }
         let count = images.count
         
         if count < 20 {
@@ -490,9 +553,40 @@ final class ObjectScanViewController: UIViewController {
         }
     }
 
+    @objc private func handleCaptureActionButton() {
+        if isCaptureRunning {
+            stopCapture()
+        } else {
+            startCapture()
+        }
+    }
+
+    private func startCapture() {
+        isCaptureRunning = true
+        captureStartTime = Date()
+        stopButton.setTitle("Finish Capture", for: .normal)
+        stopButton.isEnabled = false
+        stopButton.alpha = 0.5
+        guidanceLabel.text = "Walk slowly around the object"
+        updateQualityIndicator()
+        startAutoCapture()
+    }
+
+    private func applyIdleCaptureState() {
+        isCaptureRunning = false
+        stopButton.setTitle("Start Capture", for: .normal)
+        stopButton.isEnabled = true
+        stopButton.alpha = 1.0
+        qualityIndicator.text = "Ready to scan"
+        qualityIndicator.textColor = .white
+        qualityIndicator.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        guidanceLabel.text = "Open Help (?) for tips"
+    }
+
     // MARK: - Stop Capture
     @objc private func stopCapture() {
         captureTimer?.invalidate()
+        captureTimer = nil
         session.stopRunning()
         
         // Calculate capture duration
