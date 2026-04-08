@@ -187,9 +187,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Envision/Envision.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4PMY8MS8XC;
+				DEVELOPMENT_TEAM = K75YG36RDS;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Envision/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -206,7 +207,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 26.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.srmist.envisionit345678;
+				PRODUCT_BUNDLE_IDENTIFIER = com.srmist.envisionit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -223,9 +224,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Envision/Envision.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4PMY8MS8XC;
+				DEVELOPMENT_TEAM = K75YG36RDS;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Envision/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -242,7 +244,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 26.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.srmist.envisionit345678;
+				PRODUCT_BUNDLE_IDENTIFIER = com.srmist.envisionit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

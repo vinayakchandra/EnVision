@@ -1,6 +1,12 @@
 import UIKit
+import AuthenticationServices
 
 final class SignupViewController: UIViewController {
+    private func authDebug(_ message: String) {
+        #if DEBUG
+        print("[AuthDebug][SignupVC] \(message)")
+        #endif
+    }
 
     // MARK: - UI Elements
     private let scrollView = UIScrollView()
@@ -72,6 +78,7 @@ final class SignupViewController: UIViewController {
         title: "Sign in with Google",
         image: UIImage(named: "google_icon")
     )
+    private var currentAppleNonce: String?
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -173,6 +180,7 @@ final class SignupViewController: UIViewController {
     // MARK: - Actions
     private func setupActions() {
         createButton.addTarget(self, action: #selector(handleSignup), for: .touchUpInside)
+        appleButton.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
         googleButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
 
@@ -214,6 +222,7 @@ final class SignupViewController: UIViewController {
     }
 
     @objc private func handleGoogleSignIn() {
+        authDebug("Google button tapped.")
         HapticsManager.shared.impactLight()
         errorLabel.alpha = 0
         googleButton.isEnabled = false
@@ -222,18 +231,42 @@ final class SignupViewController: UIViewController {
             switch result {
             case .success:
                 DispatchQueue.main.async {
+                    self?.authDebug("Google sign-in completed successfully.")
                     HapticsManager.shared.success()
                     self?.googleButton.isEnabled = true
                     self?.goToMainApp()
                 }
             case .failure(let error):
                 DispatchQueue.main.async {
+                    let nsError = error as NSError
+                    self?.authDebug("Google sign-in failed. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
                     self?.googleButton.isEnabled = true
                     self?.showError(error.localizedDescription)
                     self?.showGoogleSignInErrorAlert(error)
                 }
             }
         }
+    }
+
+    @objc private func handleAppleSignIn() {
+        authDebug("Apple button tapped.")
+        HapticsManager.shared.impactLight()
+        errorLabel.alpha = 0
+        appleButton.isEnabled = false
+
+        let nonce = AuthManager.shared.randomNonceString()
+        currentAppleNonce = nonce
+        authDebug("Generated Apple nonce.")
+
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = AuthManager.shared.sha256(nonce)
+
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+        authorizationController.presentationContextProvider = self
+        authorizationController.performRequests()
+        authDebug("Apple authorization request started.")
     }
 
     private func showError(_ msg: String) {
@@ -266,5 +299,66 @@ final class SignupViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+}
+
+extension SignupViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        defer { appleButton.isEnabled = true }
+        authDebug("Apple authorization completed.")
+
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            authDebug("Apple credential cast failed.")
+            showError(AuthManagerError.appleCredentialMissing.localizedDescription)
+            return
+        }
+
+        guard let nonce = currentAppleNonce else {
+            authDebug("Missing stored nonce.")
+            showError("Apple sign-in state is invalid. Try again.")
+            return
+        }
+
+        guard let appleIDToken = appleIDCredential.identityToken else {
+            authDebug("Missing Apple identity token.")
+            showError(AuthManagerError.missingAppleIdentityToken.localizedDescription)
+            return
+        }
+
+        guard let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+            authDebug("Apple identity token UTF-8 decode failed.")
+            showError(AuthManagerError.invalidAppleIdentityToken.localizedDescription)
+            return
+        }
+
+        AuthManager.shared.signInWithApple(
+            idTokenString: idTokenString,
+            rawNonce: nonce,
+            fullName: appleIDCredential.fullName
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.authDebug("Apple sign-in completed successfully.")
+                    HapticsManager.shared.success()
+                    self?.goToMainApp()
+                case .failure(let error):
+                    let nsError = error as NSError
+                    self?.authDebug("Apple sign-in failed. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
+                    self?.showError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        appleButton.isEnabled = true
+        let nsError = error as NSError
+        authDebug("Apple authorization failed before Firebase. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
+        showError(error.localizedDescription)
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        view.window ?? ASPresentationAnchor()
     }
 }

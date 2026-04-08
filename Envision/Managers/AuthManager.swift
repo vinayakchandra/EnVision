@@ -2,6 +2,7 @@ import UIKit
 import FirebaseAuth
 import FirebaseCore
 import GoogleSignIn
+import CryptoKit
 
 enum AuthManagerError: LocalizedError {
     case missingGoogleClientID
@@ -15,6 +16,9 @@ enum AuthManagerError: LocalizedError {
     case signupInvalidEmail
     case resetEmailNotFound
     case resetInvalidEmail
+    case missingAppleIdentityToken
+    case invalidAppleIdentityToken
+    case appleCredentialMissing
 
     var errorDescription: String? {
         switch self {
@@ -40,6 +44,12 @@ enum AuthManagerError: LocalizedError {
             return "No account found with this email."
         case .resetInvalidEmail:
             return "Enter a valid email address."
+        case .missingAppleIdentityToken:
+            return "Unable to read Apple identity token."
+        case .invalidAppleIdentityToken:
+            return "Unable to decode Apple identity token."
+        case .appleCredentialMissing:
+            return "Unable to access your Apple sign-in credential."
         }
     }
 }
@@ -49,34 +59,49 @@ final class AuthManager {
 
     private init() {}
 
+    private func authDebug(_ message: String) {
+        #if DEBUG
+        print("[AuthDebug] \(message)")
+        #endif
+    }
+
     var isLoggedIn: Bool {
         Auth.auth().currentUser != nil
     }
 
     func signIn(email: String, password: String, completion: @escaping (Result<UserModel, Error>) -> Void) {
+        authDebug("Email sign-in started for: \(email)")
         Auth.auth().signIn(withEmail: email, password: password) { result, error in
             if let error {
+                let nsError = error as NSError
+                self.authDebug("Email sign-in failed. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
                 completion(.failure(self.mapEmailPasswordError(error)))
                 return
             }
 
             guard let user = result?.user else {
+                self.authDebug("Email sign-in failed: missing Firebase user in result.")
                 completion(.failure(NSError(domain: "AuthManager", code: -1)))
                 return
             }
 
+            self.authDebug("Email sign-in success. uid=\(user.uid)")
             completion(.success(self.cacheLocalUser(from: user)))
         }
     }
 
     func signUp(name: String, email: String, password: String, completion: @escaping (Result<UserModel, Error>) -> Void) {
+        authDebug("Email sign-up started for: \(email)")
         Auth.auth().createUser(withEmail: email, password: password) { result, error in
             if let error {
+                let nsError = error as NSError
+                self.authDebug("Email sign-up failed. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
                 completion(.failure(self.mapSignupError(error)))
                 return
             }
 
             guard let user = result?.user else {
+                self.authDebug("Email sign-up failed: missing Firebase user in result.")
                 completion(.failure(NSError(domain: "AuthManager", code: -1)))
                 return
             }
@@ -85,31 +110,41 @@ final class AuthManager {
             request.displayName = name
             request.commitChanges { commitError in
                 if let commitError {
+                    let nsError = commitError as NSError
+                    self.authDebug("Profile update after sign-up failed. domain=\(nsError.domain) code=\(nsError.code) message=\(commitError.localizedDescription)")
                     completion(.failure(commitError))
                     return
                 }
+                self.authDebug("Email sign-up success. uid=\(user.uid)")
                 completion(.success(self.cacheLocalUser(from: user, fallbackName: name)))
             }
         }
     }
 
     func sendPasswordReset(email: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        authDebug("Password reset requested for: \(email)")
         Auth.auth().sendPasswordReset(withEmail: email) { error in
             if let error {
+                let nsError = error as NSError
+                self.authDebug("Password reset failed. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
                 completion(.failure(self.mapPasswordResetError(error)))
             } else {
+                self.authDebug("Password reset email sent.")
                 completion(.success(()))
             }
         }
     }
 
     func signInWithGoogle(presenting viewController: UIViewController, completion: @escaping (Result<UserModel, Error>) -> Void) {
+        authDebug("Google sign-in started.")
         if let configError = googleConfigValidationError() {
+            authDebug("Google config validation failed: \(configError.localizedDescription)")
             completion(.failure(configError))
             return
         }
 
         guard let clientID = resolvedGoogleClientID() else {
+            authDebug("Google sign-in failed: missing client ID.")
             completion(.failure(AuthManagerError.missingGoogleClientID))
             return
         }
@@ -118,6 +153,8 @@ final class AuthManager {
 
         GIDSignIn.sharedInstance.signIn(withPresenting: viewController) { result, error in
             if let error {
+                let nsError = error as NSError
+                self.authDebug("Google sign-in failed before Firebase. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
                 completion(.failure(error))
                 return
             }
@@ -126,6 +163,7 @@ final class AuthManager {
                 let user = result?.user,
                 let idToken = user.idToken?.tokenString
             else {
+                self.authDebug("Google sign-in failed: missing Google ID token.")
                 completion(.failure(AuthManagerError.missingGoogleIDToken))
                 return
             }
@@ -134,23 +172,91 @@ final class AuthManager {
 
             Auth.auth().signIn(with: credential) { authResult, authError in
                 if let authError {
+                    let nsError = authError as NSError
+                    self.authDebug("Google->Firebase sign-in failed. domain=\(nsError.domain) code=\(nsError.code) message=\(authError.localizedDescription)")
                     completion(.failure(authError))
                     return
                 }
 
                 guard let firebaseUser = authResult?.user else {
+                    self.authDebug("Google->Firebase sign-in failed: missing Firebase user.")
                     completion(.failure(NSError(domain: "AuthManager", code: -1)))
                     return
                 }
 
+                self.authDebug("Google sign-in success. uid=\(firebaseUser.uid)")
                 completion(.success(self.cacheLocalUser(from: firebaseUser)))
             }
+        }
+    }
+
+    func signInWithApple(
+        idTokenString: String,
+        rawNonce: String,
+        fullName: PersonNameComponents?,
+        completion: @escaping (Result<UserModel, Error>) -> Void
+    ) {
+        authDebug("Apple->Firebase sign-in started. idTokenLength=\(idTokenString.count)")
+        let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: rawNonce, fullName: fullName)
+
+        Auth.auth().signIn(with: credential) { authResult, authError in
+            if let authError {
+                let nsError = authError as NSError
+                self.authDebug("Apple->Firebase sign-in failed. domain=\(nsError.domain) code=\(nsError.code) message=\(authError.localizedDescription)")
+                completion(.failure(authError))
+                return
+            }
+
+            guard let firebaseUser = authResult?.user else {
+                self.authDebug("Apple->Firebase sign-in failed: missing Firebase user.")
+                completion(.failure(NSError(domain: "AuthManager", code: -1)))
+                return
+            }
+
+            self.authDebug("Apple sign-in success. uid=\(firebaseUser.uid)")
+            completion(.success(self.cacheLocalUser(from: firebaseUser)))
         }
     }
 
     func signOut() throws {
         try Auth.auth().signOut()
         UserManager.shared.logout()
+    }
+
+    func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+
+        while remainingLength > 0 {
+            let randoms: [UInt8] = (0..<16).map { _ in
+                var random: UInt8 = 0
+                let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+                if errorCode != errSecSuccess {
+                    fatalError("Unable to generate nonce. OSStatus \(errorCode)")
+                }
+                return random
+            }
+
+            randoms.forEach { random in
+                if remainingLength == 0 {
+                    return
+                }
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+
+        return result
+    }
+
+    func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     @discardableResult
