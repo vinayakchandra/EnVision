@@ -18,6 +18,7 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
 
     private var capturedRoom: CapturedRoom?
     private var previewThumbnail: UIImage?
+    private weak var onboardingView: LiDAROnboardingView?
 
     // MARK: - UI
     private let saveButton: UIButton = {
@@ -30,6 +31,27 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
         btn.alpha = 1
         btn.widthAnchor.constraint(equalToConstant: 100).isActive = true
         return btn
+    }()
+
+    private let helpButton: UIButton = {
+        let btn = UIButton(type: .system)
+        btn.setImage(UIImage(systemName: "questionmark.circle"), for: .normal)
+        btn.tintColor = .white
+        btn.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        btn.layer.cornerRadius = 20
+        btn.clipsToBounds = true
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }()
+
+    private let helpLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.font = .systemFont(ofSize: 12, weight: .semibold)
+        lbl.textColor = .white
+        lbl.text = "Help"
+        lbl.textAlignment = .center
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
     }()
 
     // MARK: - Init
@@ -51,21 +73,22 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
 
         setupCaptureView()
         setupSaveButton()
+        setupHelpButton()
         startRoomCapture()
-
-        if LiDAROnboardingView.shouldShow {
-            showLiDAROnboarding()
-        }
     }
 
     // MARK: - LiDAR Onboarding
 
     private func showLiDAROnboarding() {
+        guard onboardingView == nil else { return }
+
         // Pause capture until the user finishes reading
         captureView.captureSession.stop(pauseARSession: true)
 
         let onboarding = LiDAROnboardingView()
+        onboardingView = onboarding
         onboarding.onDismiss = { [weak self] in
+            self?.onboardingView = nil
             self?.captureView.captureSession.run(configuration: RoomCaptureSession.Configuration())
         }
         onboarding.present(in: view)
@@ -95,6 +118,24 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
                                     ])
     }
 
+    private func setupHelpButton() {
+        let helpStack = UIStackView(arrangedSubviews: [helpButton, helpLabel])
+        helpStack.axis = .vertical
+        helpStack.spacing = 4
+        helpStack.alignment = .center
+        helpStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(helpStack)
+
+        NSLayoutConstraint.activate([
+            helpStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            helpStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            helpButton.widthAnchor.constraint(equalToConstant: 40),
+            helpButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
+
+        helpButton.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
+    }
+
     private func startRoomCapture() {
         captureView.captureSession.delegate = self
 
@@ -120,6 +161,10 @@ final class RoomPlanScannerViewController: UIViewController, RoomCaptureSessionD
     }
 
     // MARK: - Actions
+    @objc private func helpTapped() {
+        showLiDAROnboarding()
+    }
+
     @objc private func saveTapped() {
         guard let room = capturedRoom else {
             return
