@@ -93,7 +93,7 @@ final class ObjectCapturePreviewController: UIViewController {
 
     private let qualityLabel: UILabel = {
         let label = UILabel()
-        label.text = "Processing Speed"
+        label.text = "Model Quality"
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.textColor = .secondaryLabel
         label.textAlignment = .center
@@ -101,11 +101,18 @@ final class ObjectCapturePreviewController: UIViewController {
         return label
     }()
 
-    private let qualitySegment: UISegmentedControl = {
-        let seg = UISegmentedControl(items: ["Fast", "Balanced", "High Quality"])
-        seg.selectedSegmentIndex = 1
-        seg.translatesAutoresizingMaskIntoConstraints = false
-        return seg
+    private let qualityValueLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Standard"
+        label.font = .preferredFont(forTextStyle: .headline)
+        label.textColor = .label
+        label.textAlignment = .center
+        label.backgroundColor = .tertiarySystemFill
+        label.layer.cornerRadius = 10
+        label.layer.cornerCurve = .continuous
+        label.clipsToBounds = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
     }()
 
     private let qualityDescLabel: UILabel = {
@@ -232,7 +239,6 @@ final class ObjectCapturePreviewController: UIViewController {
     }
 
     private func bindActions() {
-        qualitySegment.addTarget(self, action: #selector(qualityChanged), for: .valueChanged)
         generateButton.addTarget(self, action: #selector(startProcessing), for: .touchUpInside)
         retakeButton.addTarget(self, action: #selector(retakePhotos), for: .touchUpInside)
         exportButton.addTarget(self, action: #selector(exportPhotos), for: .touchUpInside)
@@ -249,7 +255,7 @@ final class ObjectCapturePreviewController: UIViewController {
             collectionView,
             statusCard,
             qualityLabel,
-            qualitySegment,
+            qualityValueLabel,
             qualityDescLabel,
             progressView,
             progressLabel,
@@ -301,11 +307,12 @@ final class ObjectCapturePreviewController: UIViewController {
             qualityLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
             qualityLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
 
-            qualitySegment.topAnchor.constraint(equalTo: qualityLabel.bottomAnchor, constant: 8),
-            qualitySegment.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
-            qualitySegment.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            qualityValueLabel.topAnchor.constraint(equalTo: qualityLabel.bottomAnchor, constant: 8),
+            qualityValueLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
+            qualityValueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            qualityValueLabel.heightAnchor.constraint(equalToConstant: 42),
 
-            qualityDescLabel.topAnchor.constraint(equalTo: qualitySegment.bottomAnchor, constant: 8),
+            qualityDescLabel.topAnchor.constraint(equalTo: qualityValueLabel.bottomAnchor, constant: 8),
             qualityDescLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
             qualityDescLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
 
@@ -373,26 +380,9 @@ final class ObjectCapturePreviewController: UIViewController {
     }
 
     // MARK: - Quality
-    @objc private func qualityChanged() {
-        configureQualityDescription()
-        UISelectionFeedbackGenerator().selectionChanged()
-    }
-
     private func configureQualityDescription() {
-        switch qualitySegment.selectedSegmentIndex {
-        case 0:
-            selectedDetailLevel = .reduced
-            qualityDescLabel.text = "~30s-1 min • Fast preview quality"
-        case 1:
-            selectedDetailLevel = .reduced
-            qualityDescLabel.text = "~1-3 min • Balanced speed and detail"
-        case 2:
-            selectedDetailLevel = .reduced
-            qualityDescLabel.text = "~3-8 min • Higher detail post-processing"
-        default:
-            selectedDetailLevel = .reduced
-            qualityDescLabel.text = "~1-3 min • Balanced speed and detail"
-        }
+        selectedDetailLevel = .reduced
+        qualityDescLabel.text = "Object Capture currently uses Standard detail (.reduced) for stable, fast processing."
     }
 
     // MARK: - Background Processing Hooks
@@ -552,7 +542,6 @@ final class ObjectCapturePreviewController: UIViewController {
             exportButton.isEnabled = true
             retakeButton.isEnabled = true
             cancelButton.isHidden = true
-            qualitySegment.isEnabled = true
             activityIndicator.stopAnimating()
             progressView.isHidden = true
             progressLabel.isHidden = true
@@ -563,7 +552,6 @@ final class ObjectCapturePreviewController: UIViewController {
             exportButton.isEnabled = false
             retakeButton.isEnabled = false
             cancelButton.isHidden = false
-            qualitySegment.isEnabled = false
             activityIndicator.startAnimating()
             progressView.isHidden = false
             progressLabel.isHidden = false
@@ -574,7 +562,6 @@ final class ObjectCapturePreviewController: UIViewController {
             exportButton.isEnabled = true
             retakeButton.isEnabled = true
             cancelButton.isHidden = true
-            qualitySegment.isEnabled = true
             activityIndicator.stopAnimating()
             progressView.isHidden = false
             progressLabel.isHidden = false
@@ -585,7 +572,6 @@ final class ObjectCapturePreviewController: UIViewController {
             exportButton.isEnabled = true
             retakeButton.isEnabled = true
             cancelButton.isHidden = true
-            qualitySegment.isEnabled = true
             activityIndicator.stopAnimating()
             UIView.animate(withDuration: 0.2) { self.backgroundInfoLabel.alpha = 0 }
         }
