@@ -402,6 +402,35 @@ final class RoomColorManager {
         return documentsURL.appendingPathComponent("textures", isDirectory: true)
     }
 
+    /// Saves a user-picked image to Documents/textures and returns the texture name.
+    /// The surface is encoded in the filename so `availableTextureItems(for:)` picks it up automatically.
+    @discardableResult
+    func saveCustomTexture(_ image: UIImage, for surface: TextureSurfaceKind) -> String {
+        ensureBundledTexturesAvailable()
+
+        let surfaceTag: String
+        switch surface {
+        case .floor:   surfaceTag = "floor"
+        case .wall:    surfaceTag = "wall"
+        case .door:    surfaceTag = "door"
+        case .window:  surfaceTag = "window"
+        case .table:   surfaceTag = "table"
+        case .chair:   surfaceTag = "chair"
+        case .storage: surfaceTag = "storage"
+        }
+
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let name = "custom-\(surfaceTag)-\(timestamp)"
+        let folderURL = texturesFolderURL()
+        let outputURL = folderURL.appendingPathComponent(name).appendingPathExtension("jpg")
+
+        if let data = image.jpegData(compressionQuality: 0.92) {
+            try? data.write(to: outputURL, options: .atomic)
+        }
+
+        return name
+    }
+
     /// Migrate all persisted data (color JSON, thumbnail, memory cache) from the old room URL to the new one.
     /// Call this immediately after the USDZ file is renamed on disk.
     func renameRoom(from oldURL: URL, to newURL: URL) {

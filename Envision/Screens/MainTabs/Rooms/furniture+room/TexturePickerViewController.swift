@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import PhotosUI
 
 // MARK: - Surface
 
@@ -77,6 +78,9 @@ final class TexturePickerViewController: UIViewController {
     private let orderedSurfaces: [TextureSurface] = [.floor, .wall, .door, .window, .table, .chair, .storage]
     private var optionsBySurface: [TextureSurface: [TextureOption]] = [:]
     private var collectionViewsBySurface: [TextureSurface: UICollectionView] = [:]
+
+    // Surface that triggered the photo picker — set before presenting PHPickerViewController
+    private var pendingPickSurface: TextureSurface?
 
     // MARK: - Views
 
@@ -199,6 +203,7 @@ final class TexturePickerViewController: UIViewController {
         cv.dataSource = self
         cv.delegate = self
         cv.register(TextureCell.self, forCellWithReuseIdentifier: TextureCell.reuseID)
+        cv.register(AddTextureCell.self, forCellWithReuseIdentifier: AddTextureCell.reuseID)
         return cv
     }
 
@@ -237,18 +242,27 @@ extension TexturePickerViewController: UICollectionViewDataSource, UICollectionV
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         guard let surface = surface(for: collectionView.tag) else { return 0 }
-        return optionsBySurface[surface]?.count ?? 0
+        // +1 for the "Add from Photos" cell at the end
+        return (optionsBySurface[surface]?.count ?? 0) + 1
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        guard let surface = surface(for: collectionView.tag) else {
+            return collectionView.dequeueReusableCell(withReuseIdentifier: TextureCell.reuseID, for: indexPath)
+        }
+        let options = optionsBySurface[surface] ?? []
+
+        // Last slot is always the "+" add button
+        if indexPath.item == options.count {
+            return collectionView.dequeueReusableCell(withReuseIdentifier: AddTextureCell.reuseID, for: indexPath)
+        }
+
         let cell = collectionView.dequeueReusableCell(
             withReuseIdentifier: TextureCell.reuseID,
             for: indexPath
         ) as! TextureCell
 
-        guard let surface = surface(for: collectionView.tag) else { return cell }
-        guard let option = optionsBySurface[surface]?[indexPath.item] else { return cell }
-
+        let option = options[indexPath.item]
         let selectedName = currentTextureNames[surface] ?? ""
         cell.configure(with: option, selected: option.name == selectedName)
         return cell
@@ -256,12 +270,111 @@ extension TexturePickerViewController: UICollectionViewDataSource, UICollectionV
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         guard let surface = surface(for: collectionView.tag) else { return }
-        guard let option = optionsBySurface[surface]?[indexPath.item] else { return }
+        let options = optionsBySurface[surface] ?? []
 
+        // "+" cell tapped — open photo picker
+        if indexPath.item == options.count {
+            pendingPickSurface = surface
+            var config = PHPickerConfiguration(photoLibrary: .shared())
+            config.filter = .images
+            config.selectionLimit = 1
+            let picker = PHPickerViewController(configuration: config)
+            picker.delegate = self
+            present(picker, animated: true)
+            return
+        }
+
+        let option = options[indexPath.item]
         currentTextureNames[surface] = option.name
         collectionView.reloadData()
         delegate?.texturePicker(self, didSelect: option, for: surface)
     }
+}
+
+// MARK: - PHPickerViewControllerDelegate
+
+extension TexturePickerViewController: PHPickerViewControllerDelegate {
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let surface = pendingPickSurface, let result = results.first else {
+            pendingPickSurface = nil
+            return
+        }
+        pendingPickSurface = nil
+
+        result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self, let image = object as? UIImage else { return }
+            let name = RoomColorManager.shared.saveCustomTexture(image, for: surface.surfaceKind)
+            DispatchQueue.main.async {
+                self.reloadTextureOptions()
+                let option = TextureOption(name: name, displayName: "Custom")
+                self.currentTextureNames[surface] = name
+                self.collectionViewsBySurface[surface]?.reloadData()
+                self.delegate?.texturePicker(self, didSelect: option, for: surface)
+            }
+        }
+    }
+}
+
+// MARK: - AddTextureCell
+
+private final class AddTextureCell: UICollectionViewCell {
+
+    static let reuseID = "AddTextureCell"
+
+    private let plusImageView: UIImageView = {
+        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .light)
+        let iv = UIImageView(image: UIImage(systemName: "plus", withConfiguration: config))
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.tintColor = UIColor(white: 0.6, alpha: 1)
+        iv.contentMode = .center
+        return iv
+    }()
+
+    private let borderView: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.layer.cornerRadius = 12
+        v.layer.cornerCurve = .continuous
+        v.layer.borderWidth = 1.5
+        v.layer.borderColor = UIColor(white: 0.4, alpha: 1).cgColor
+        v.backgroundColor = UIColor(white: 0.18, alpha: 1)
+        return v
+    }()
+
+    private let nameLabel: UILabel = {
+        let lbl = UILabel()
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        lbl.text = "Add"
+        lbl.font = .systemFont(ofSize: 11, weight: .medium)
+        lbl.textColor = UIColor(white: 0.6, alpha: 1)
+        lbl.textAlignment = .center
+        return lbl
+    }()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentView.addSubview(borderView)
+        borderView.addSubview(plusImageView)
+        contentView.addSubview(nameLabel)
+
+        NSLayoutConstraint.activate([
+            borderView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            borderView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            borderView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            borderView.heightAnchor.constraint(equalToConstant: 88),
+
+            plusImageView.centerXAnchor.constraint(equalTo: borderView.centerXAnchor),
+            plusImageView.centerYAnchor.constraint(equalTo: borderView.centerYAnchor),
+
+            nameLabel.topAnchor.constraint(equalTo: borderView.bottomAnchor, constant: 6),
+            nameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
 }
 
 // MARK: - TextureCell
