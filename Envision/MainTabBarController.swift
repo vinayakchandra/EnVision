@@ -40,7 +40,10 @@ final class MainTabBarController: UITabBarController, UITabBarControllerDelegate
         let profile = UINavigationController(rootViewController: ProfileViewController())
         profile.tabBarItem = UITabBarItem(title: "Profile", image: UIImage(systemName: "person"), selectedImage: UIImage(systemName: "person.fill"))
 
-        viewControllers = [home, scan, profile]
+        let search = UINavigationController(rootViewController: SearchViewController())
+        search.tabBarItem = UITabBarItem(tabBarSystemItem: .search , tag: 3) 
+
+        viewControllers = [home, scan, profile, search]
         tabBar.tintColor = AppColors.accent
     }
 
