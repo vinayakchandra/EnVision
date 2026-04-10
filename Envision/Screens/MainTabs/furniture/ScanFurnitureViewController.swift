@@ -382,8 +382,7 @@ final class ScanFurnitureViewController: UIViewController {
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "Search models"
         searchController.searchBar.autocapitalizationType = .none
-        navigationItem.searchController = searchController
-        navigationItem.hidesSearchBarWhenScrolling = true
+        // Search handled by the dedicated Search tab — not added to nav bar
         definesPresentationContext = true
     }
 

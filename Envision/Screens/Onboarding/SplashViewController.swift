@@ -65,7 +65,7 @@ class SplashViewController: UIViewController {
 
             // Icon
             iconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            iconView.topAnchor.constraint(equalTo: view.topAnchor, constant: 210),
+            iconView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -80),
             iconView.widthAnchor.constraint(equalToConstant: 200),
             iconView.heightAnchor.constraint(equalToConstant: 200),
 
