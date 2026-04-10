@@ -60,11 +60,10 @@ final class LoginViewController: UIViewController {
         return btn
     }()
 
-    private lazy var appleButton: ASAuthorizationAppleIDButton = {
-        let btn = ASAuthorizationAppleIDButton(type: .signIn, style: .black)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.cornerRadius = 25
-        return btn
+    private let appleButtonContainer: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
     }()
     private let googleButton = SocialButton(title: "Sign in with Google", image: UIImage(named: "google_icon"))
     private var currentAppleNonce: String?
@@ -88,6 +87,7 @@ final class LoginViewController: UIViewController {
         setupScrollView()
         setupUI()
         setupActions()
+        refreshAppleButtonStyle()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -120,7 +120,7 @@ final class LoginViewController: UIViewController {
 
     private func setupUI() {
         [logoImageView, titleLabel, emailField, passwordField, errorLabel, continueButton,
-         forgotPasswordButton, createAccountButton, appleButton, googleButton
+         forgotPasswordButton, createAccountButton, appleButtonContainer, googleButton
         ].forEach { contentView.addSubview($0) }
         NSLayoutConstraint.activate([
                                         logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
@@ -131,8 +131,7 @@ final class LoginViewController: UIViewController {
                                         titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
                                         emailField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 40),
-                                        emailField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 30),
-                                        emailField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -30),
+                                        emailField.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
                                         passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 18),
                                         passwordField.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
@@ -153,18 +152,23 @@ final class LoginViewController: UIViewController {
                                         createAccountButton.centerYAnchor.constraint(equalTo: forgotPasswordButton.centerYAnchor),
                                         createAccountButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
 
-                                        appleButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
-                                        appleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
-                                        appleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
+                                        appleButtonContainer.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
+                                        appleButtonContainer.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
+                                        appleButtonContainer.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
+                                        appleButtonContainer.heightAnchor.constraint(equalToConstant: 50),
 
-                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 14),
+                                        googleButton.topAnchor.constraint(equalTo: appleButtonContainer.bottomAnchor, constant: 14),
                                         googleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
                                         googleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
                                         googleButton.heightAnchor.constraint(equalToConstant: 50),
 
                                         googleButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
                                     ])
+
+        let preferredWidth = emailField.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -60)
+        preferredWidth.priority = .defaultHigh
+        preferredWidth.isActive = true
+        emailField.widthAnchor.constraint(lessThanOrEqualToConstant: 460).isActive = true
     }
 
     // MARK: - Actions
@@ -172,7 +176,6 @@ final class LoginViewController: UIViewController {
         continueButton.addTarget(self, action: #selector(handleLogin), for: .touchUpInside)
         createAccountButton.addTarget(self, action: #selector(goToSignup), for: .touchUpInside)
         forgotPasswordButton.addTarget(self, action: #selector(goToForgotPassword), for: .touchUpInside)
-        appleButton.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
         googleButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
 
@@ -232,7 +235,7 @@ final class LoginViewController: UIViewController {
         authDebug("Apple button tapped.")
         HapticsManager.shared.impactLight()
         errorLabel.alpha = 0
-        appleButton.isEnabled = false
+        appleButtonContainer.isUserInteractionEnabled = false
 
         let nonce = AuthManager.shared.randomNonceString()
         currentAppleNonce = nonce
@@ -263,6 +266,29 @@ final class LoginViewController: UIViewController {
         view.endEditing(true)
     }
 
+
+    private func refreshAppleButtonStyle() {
+        appleButtonContainer.subviews.forEach { $0.removeFromSuperview() }
+        let style: ASAuthorizationAppleIDButton.Style = traitCollection.userInterfaceStyle == .dark ? .white : .black
+        let btn = ASAuthorizationAppleIDButton(type: .signIn, style: style)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.cornerRadius = 25
+        btn.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
+        appleButtonContainer.addSubview(btn)
+        NSLayoutConstraint.activate([
+            btn.topAnchor.constraint(equalTo: appleButtonContainer.topAnchor),
+            btn.leadingAnchor.constraint(equalTo: appleButtonContainer.leadingAnchor),
+            btn.trailingAnchor.constraint(equalTo: appleButtonContainer.trailingAnchor),
+            btn.bottomAnchor.constraint(equalTo: appleButtonContainer.bottomAnchor),
+        ])
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            refreshAppleButtonStyle()
+        }
+    }
 
     private func showError(_ message: String) {
         HapticsManager.shared.error()
@@ -297,7 +323,7 @@ final class LoginViewController: UIViewController {
 
 extension LoginViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        defer { appleButton.isEnabled = true }
+        defer { appleButtonContainer.isUserInteractionEnabled = true }
         authDebug("Apple authorization completed.")
 
         guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
@@ -345,7 +371,7 @@ extension LoginViewController: ASAuthorizationControllerDelegate, ASAuthorizatio
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        appleButton.isEnabled = true
+        appleButtonContainer.isUserInteractionEnabled = true
         let nsError = error as NSError
         authDebug("Apple authorization failed before Firebase. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
         showError(error.localizedDescription)

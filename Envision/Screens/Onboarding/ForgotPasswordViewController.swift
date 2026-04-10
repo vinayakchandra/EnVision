@@ -123,8 +123,7 @@ final class ForgotPasswordViewController: UIViewController {
             titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            subtitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 35),
-            subtitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -35),
+            subtitleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
             emailField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 28),
             emailField.leadingAnchor.constraint(equalTo: subtitleLabel.leadingAnchor),
@@ -141,6 +140,11 @@ final class ForgotPasswordViewController: UIViewController {
 
             continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -80)
         ])
+
+        let preferredWidth = subtitleLabel.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -70)
+        preferredWidth.priority = .defaultHigh
+        preferredWidth.isActive = true
+        subtitleLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 460).isActive = true
     }
 
     private func setupActions() {

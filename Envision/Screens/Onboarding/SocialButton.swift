@@ -38,7 +38,7 @@ final class SocialButton: UIButton {
         ])
 
         // Button styling
-        backgroundColor = .systemBackground
+        backgroundColor = .secondarySystemGroupedBackground
         layer.cornerRadius = 25
         layer.cornerCurve = .continuous
         layer.borderWidth = 1
