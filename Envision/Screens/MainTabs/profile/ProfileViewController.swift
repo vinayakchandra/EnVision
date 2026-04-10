@@ -57,7 +57,8 @@ class ProfileViewController: UIViewController {
             ("shield.lefthalf.filled", "Privacy Policy", false),
         ],
         .logout: [
-            ("rectangle.portrait.and.arrow.right", "Sign Out", true)
+            ("rectangle.portrait.and.arrow.right", "Sign Out", true),
+            ("trash.fill", "Delete Account", true),
         ],
     ]
 
@@ -238,6 +239,70 @@ class ProfileViewController: UIViewController {
     }
 
     // Logout
+    private func handleDeleteAccount() {
+        HapticsManager.shared.warning()
+        let sheet = UIAlertController(
+            title: "Delete Account",
+            message: "This will permanently delete your account and all associated data. This action cannot be undone.",
+            preferredStyle: .actionSheet
+        )
+
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        sheet.addAction(
+            UIAlertAction(title: "Delete Account", style: .destructive) { [weak self] _ in
+                self?.confirmDeleteAccount()
+            })
+
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+
+        present(sheet, animated: true)
+    }
+
+    private func confirmDeleteAccount() {
+        let confirm = UIAlertController(
+            title: "Are you sure?",
+            message: "Your account will be permanently deleted. You cannot recover it.",
+            preferredStyle: .alert
+        )
+
+        confirm.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        confirm.addAction(
+            UIAlertAction(title: "Yes, Delete", style: .destructive) { [weak self] _ in
+                self?.performDeleteAccount()
+            })
+
+        present(confirm, animated: true)
+    }
+
+    private func performDeleteAccount() {
+        AuthManager.shared.deleteAccount { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success:
+                    HapticsManager.shared.success()
+                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let sceneDelegate = scene.delegate as? SceneDelegate {
+                        sceneDelegate.switchToLogin()
+                    }
+                case .failure(let error):
+                    HapticsManager.shared.error()
+                    let alert = UIAlertController(
+                        title: "Delete Failed",
+                        message: error.localizedDescription,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+
     private func handleLogout() {
         HapticsManager.shared.warning()
         let alert = UIAlertController(
@@ -382,8 +447,11 @@ extension ProfileViewController: UITableViewDelegate, UITableViewDataSource {
         case (.about, "Privacy Policy"):
             navigationController?.pushViewController(PrivacyPolicyViewController(), animated: true)
 
-        case (.logout, _):
+        case (.logout, "Sign Out"):
             handleLogout()
+
+        case (.logout, "Delete Account"):
+            handleDeleteAccount()
 
         default:
             break

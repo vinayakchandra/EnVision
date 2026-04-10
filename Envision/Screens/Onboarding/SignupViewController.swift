@@ -68,11 +68,12 @@ final class SignupViewController: UIViewController {
         return lbl
     }()
 
-    private let appleButton = SocialButton(
-        title: "Sign up with Apple",
-        image: UIImage(systemName: "apple.logo"),
-        iconTintColor: .black
-    )
+    private lazy var appleButton: ASAuthorizationAppleIDButton = {
+        let btn = ASAuthorizationAppleIDButton(type: .signUp, style: .black)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.cornerRadius = 25
+        return btn
+    }()
 
     private let googleButton = SocialButton(
         title: "Sign in with Google",
