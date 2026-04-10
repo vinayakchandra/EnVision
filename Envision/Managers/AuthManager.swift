@@ -19,6 +19,7 @@ enum AuthManagerError: LocalizedError {
     case missingAppleIdentityToken
     case invalidAppleIdentityToken
     case appleCredentialMissing
+    case requiresRecentLogin
 
     var errorDescription: String? {
         switch self {
@@ -50,6 +51,8 @@ enum AuthManagerError: LocalizedError {
             return "Unable to decode Apple identity token."
         case .appleCredentialMissing:
             return "Unable to access your Apple sign-in credential."
+        case .requiresRecentLogin:
+            return "For security, please sign out and sign back in before deleting your account."
         }
     }
 }
@@ -221,6 +224,34 @@ final class AuthManager {
     func signOut() throws {
         try Auth.auth().signOut()
         UserManager.shared.logout()
+    }
+
+    func deleteAccount(completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let user = Auth.auth().currentUser else {
+            completion(.failure(NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user is signed in."])))
+            return
+        }
+
+        authDebug("Delete account started. uid=\(user.uid)")
+
+        user.delete { [self] error in
+            if let error {
+                let nsError = error as NSError
+                self.authDebug("Delete account failed. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
+                if nsError.domain == AuthErrorDomain,
+                   let code = AuthErrorCode(rawValue: nsError.code),
+                   code == .requiresRecentLogin {
+                    completion(.failure(AuthManagerError.requiresRecentLogin))
+                } else {
+                    completion(.failure(error))
+                }
+                return
+            }
+
+            self.authDebug("Account deleted successfully.")
+            UserManager.shared.logout()
+            completion(.success(()))
+        }
     }
 
     func randomNonceString(length: Int = 32) -> String {

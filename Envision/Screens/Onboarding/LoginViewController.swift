@@ -60,11 +60,12 @@ final class LoginViewController: UIViewController {
         return btn
     }()
 
-    private let appleButton = SocialButton(
-        title: "Sign in with Apple",
-        image: UIImage(systemName: "apple.logo"),
-        iconTintColor: .black
-    )
+    private lazy var appleButton: ASAuthorizationAppleIDButton = {
+        let btn = ASAuthorizationAppleIDButton(type: .signIn, style: .black)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.cornerRadius = 25
+        return btn
+    }()
     private let googleButton = SocialButton(title: "Sign in with Google", image: UIImage(named: "google_icon"))
     private var currentAppleNonce: String?
 
