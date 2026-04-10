@@ -129,7 +129,7 @@ final class SignupViewController: UIViewController {
         NSLayoutConstraint.activate([
                                         logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
                                         logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-                                        logoImageView.heightAnchor.constraint(equalToConstant: 110),
+                                        logoImageView.heightAnchor.constraint(equalToConstant: 160),
 
                                         titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 10),
                                         titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
