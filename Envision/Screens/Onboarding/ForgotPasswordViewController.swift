@@ -117,7 +117,7 @@ final class ForgotPasswordViewController: UIViewController {
             // Move the whole block up nicely
             logoImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 80),
             logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            logoImageView.heightAnchor.constraint(equalToConstant: 110),
+            logoImageView.heightAnchor.constraint(equalToConstant: 160),
 
             titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 18),
             titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
