@@ -32,6 +32,15 @@ final class RoomViewerViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         navigationItem.titleView = segmentedControl
+        // On iPad we are presented as a full-screen modal (no tab bar) so we
+        // need a close button instead of the navigation-stack back button.
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            navigationItem.leftBarButtonItem = UIBarButtonItem(
+                barButtonSystemItem: .close,
+                target: self,
+                action: #selector(closeTapped)
+            )
+        }
         showVisualize()
     }
 
@@ -40,6 +49,10 @@ final class RoomViewerViewController: UIViewController {
         segmentedControl.selectedSegmentIndex == 0
             ? showVisualize()
             : showEdit()
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
     }
 
     // MARK: - Child Management
@@ -59,16 +72,25 @@ final class RoomViewerViewController: UIViewController {
             current.removeFromParent()
         }
 
-        // Add new child
+        // Add new child — use Auto Layout so the frame is always correct,
+        // even on iPad where view.bounds at viewDidLoad time may not be final.
         addChild(vc)
+        vc.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(vc.view)
-        vc.view.frame = view.bounds
-        vc.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        NSLayoutConstraint.activate([
+            vc.view.topAnchor.constraint(equalTo: view.topAnchor),
+            vc.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            vc.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            vc.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
         vc.didMove(toParent: self)
 
-        // Forward nav items (use plural rightBarButtonItems to show all buttons)
+        // Forward right nav items from the child (share, add, etc.)
         navigationItem.rightBarButtonItems = vc.navigationItem.rightBarButtonItems
-        navigationItem.leftBarButtonItems  = vc.navigationItem.leftBarButtonItems
+        // Only forward left items on iPhone (on iPad the close button owns the left side)
+        if UIDevice.current.userInterfaceIdiom != .pad {
+            navigationItem.leftBarButtonItems = vc.navigationItem.leftBarButtonItems
+        }
 
         currentChild = vc
     }
