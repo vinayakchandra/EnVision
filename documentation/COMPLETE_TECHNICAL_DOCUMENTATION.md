@@ -144,9 +144,10 @@ MainTabBarController
    - "Send Reset Link" button → `handleReset()`
 
 2. **Current Behavior**:
-   - Validates email
-   - Shows alert "Check your email"
-   - **No actual backend call** (TODO comment in code)
+   - Validates email format
+   - Calls `AuthManager.shared.sendPasswordReset(email:)` → `Auth.auth().sendPasswordReset(withEmail:)`
+   - On success: shows "Reset Email Sent" alert, then pops back to Login
+   - On failure: displays Firebase error message inline
 
 ### 3.2 Session Management
 

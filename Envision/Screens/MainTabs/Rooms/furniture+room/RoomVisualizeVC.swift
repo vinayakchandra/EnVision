@@ -131,7 +131,7 @@ final class RoomVisualizeVC: UIViewController {
         NSLayoutConstraint.activate([
             overlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             overlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            overlay.widthAnchor.constraint(equalToConstant: 220),
+            overlay.widthAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .pad ? 260 : 220),
             overlay.heightAnchor.constraint(equalToConstant: 120),
 
             indicator.topAnchor.constraint(equalTo: overlay.contentView.topAnchor, constant: 18),
@@ -984,7 +984,13 @@ final class RoomVisualizeVC: UIViewController {
         displayedModel = clone
 
         fitToScreen(clone)
-        
+
+        // Set camera distance based on the model's actual displayed size so it
+        // fills the view properly on both iPhone and iPad.
+        let displayedBounds = clone.visualBounds(relativeTo: nil)
+        let maxDisplayedDim = max(displayedBounds.extents.x, displayedBounds.extents.y, displayedBounds.extents.z)
+        cameraDistance = max(0.8, maxDisplayedDim * 2.2)
+
         // Apply saved colors from RoomColorManager
         applySavedColors(to: clone)
         applyHiddenEntityVisibility(to: clone)

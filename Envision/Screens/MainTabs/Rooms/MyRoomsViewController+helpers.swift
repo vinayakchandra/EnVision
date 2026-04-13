@@ -84,7 +84,23 @@ extension MyRoomsViewController: UICollectionViewDataSource, UICollectionViewDel
         guard indexPath.section == 1 else { return }
         HapticsManager.shared.impactLight()
         let url = displayFiles[indexPath.item]
-        navigationController?.pushViewController(RoomViewerViewController(roomURL: url), animated: true)
+        openRoomViewer(for: url)
+    }
+
+    // MARK: - Room Viewer Navigation
+
+    func openRoomViewer(for url: URL) {
+        let viewer = RoomViewerViewController(roomURL: url)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // On iPad, present full-screen so the system tab bar (which on
+            // iPadOS 18 renders inside the navigation area and cannot be hidden
+            // via hidesBottomBarWhenPushed) is fully covered.
+            let nav = UINavigationController(rootViewController: viewer)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        } else {
+            navigationController?.pushViewController(viewer, animated: true)
+        }
     }
 
     func collectionView(

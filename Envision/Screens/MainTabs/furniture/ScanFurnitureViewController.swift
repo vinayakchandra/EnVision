@@ -42,7 +42,12 @@ final class ScanFurnitureViewController: UIViewController {
     }
 
     private var previewURL: URL?
-    private let thumbnailCache: NSCache<NSURL, UIImage> = .init()
+    private let thumbnailCache: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 50
+        cache.totalCostLimit = 50 * 1024 * 1024
+        return cache
+    }()
     private var refreshControl: UIRefreshControl! // refresh
 
     // MARK: - Filter State
@@ -526,7 +531,7 @@ final class ScanFurnitureViewController: UIViewController {
         NSLayoutConstraint.activate([
                                         loadingOverlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                                         loadingOverlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-                                        loadingOverlay.widthAnchor.constraint(equalToConstant: 220),
+                                        loadingOverlay.widthAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .pad ? 260 : 220),
                                         loadingOverlay.heightAnchor.constraint(equalToConstant: 120),
 
                                         activityIndicator.topAnchor.constraint(equalTo: loadingOverlay.contentView.topAnchor, constant: 18),
