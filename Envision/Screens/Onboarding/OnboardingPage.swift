@@ -10,6 +10,7 @@ final class OnboardingPage: UIViewController {
 
     enum Visual {
         case systemImage(String)
+        case assetImage(String)
         case lottie(String)
     }
 
@@ -30,6 +31,14 @@ final class OnboardingPage: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
 
+    init(title: String, subtitle: String, assetImage: String, fallbackSystemImage: String) {
+        self.titleText = title
+        self.subtitleText = subtitle
+        self.visual = .assetImage(assetImage)
+        self.fallbackSystemImage = fallbackSystemImage
+        super.init(nibName: nil, bundle: nil)
+    }
+
     init(title: String, subtitle: String, lottieName: String, fallbackSystemImage: String) {
         self.titleText = title
         self.subtitleText = subtitle
@@ -47,6 +56,7 @@ final class OnboardingPage: UIViewController {
         v.translatesAutoresizingMaskIntoConstraints = false
         v.layer.cornerRadius = 36
         v.layer.cornerCurve = .continuous
+        v.clipsToBounds = true
         return v
     }()
 
@@ -114,6 +124,8 @@ final class OnboardingPage: UIViewController {
             switch visual {
             case .lottie:
                 return 240
+            case .assetImage:
+                return 300
             case .systemImage:
                 return 100
             }
@@ -141,6 +153,8 @@ final class OnboardingPage: UIViewController {
         switch visual {
         case let .systemImage(iconName):
             applySystemImage(iconName)
+        case let .assetImage(assetName):
+            applyAssetImage(assetName)
         case let .lottie(lottieName):
             applyLottie(lottieName)
         }
@@ -184,16 +198,43 @@ final class OnboardingPage: UIViewController {
         ])
     }
 
+    private func applyAssetImage(_ assetName: String) {
+        guard let image = UIImage(named: assetName) else {
+            applySystemImage(fallbackSystemImage)
+            return
+        }
+
+        iconWrapper.backgroundColor = .secondarySystemBackground
+        iconWrapper.layer.cornerRadius = 28
+        iconWrapper.layer.cornerCurve = .continuous
+        iconWrapper.layer.borderWidth = 1
+        iconWrapper.layer.borderColor = UIColor.white.withAlphaComponent(0.06).cgColor
+        iconView.image = image
+        iconView.tintColor = nil
+        iconView.contentMode = .scaleAspectFill
+        iconView.clipsToBounds = true
+        iconView.layer.cornerRadius = 28
+        iconView.layer.cornerCurve = .continuous
+
+        iconWrapper.addSubview(iconView)
+        NSLayoutConstraint.activate([
+            iconView.topAnchor.constraint(equalTo: iconWrapper.topAnchor),
+            iconView.leadingAnchor.constraint(equalTo: iconWrapper.leadingAnchor),
+            iconView.trailingAnchor.constraint(equalTo: iconWrapper.trailingAnchor),
+            iconView.bottomAnchor.constraint(equalTo: iconWrapper.bottomAnchor),
+        ])
+    }
+
     // MARK: - Entrance (called by OnboardingController)
 
     func playEntranceAnimation() {
         let views: [UIView] = [iconWrapper, titleLabel, subtitleLabel]
         views.forEach {
             $0.alpha = 0
-            $0.transform = CGAffineTransform(translationX: 0, y: 16)
+            $0.transform = .identity
         }
 
-        UIView.animate(withDuration: 0.4, delay: 0, options: .curveEaseOut) {
+        UIView.animate(withDuration: 0.4, delay: 0, options: [.curveEaseInOut, .beginFromCurrentState]) {
             views.forEach {
                 $0.alpha = 1
                 $0.transform = .identity
