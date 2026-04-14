@@ -6,9 +6,9 @@ final class PrimaryButton1: UIButton {
 
         var config = UIButton.Configuration.filled()
         config.title = title
-        config.baseBackgroundColor = UIColor(red: 0.28, green: 0.56, blue: 0.51, alpha: 1)
+        config.baseBackgroundColor = AppColors.accent
         config.baseForegroundColor = .white
-        config.cornerStyle = .large
+        config.cornerStyle = .capsule
         config.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20)
 
         self.configuration = config

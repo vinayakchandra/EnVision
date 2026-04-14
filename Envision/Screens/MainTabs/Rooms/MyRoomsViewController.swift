@@ -190,8 +190,7 @@ final class MyRoomsViewController: UIViewController {
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "Search room models"
         searchController.searchBar.autocapitalizationType = .none
-        navigationItem.searchController = searchController
-        navigationItem.hidesSearchBarWhenScrolling = true
+        // Search handled by the dedicated Search tab — not added to nav bar
         definesPresentationContext = true
     }
 
@@ -243,9 +242,11 @@ final class MyRoomsViewController: UIViewController {
         ))
         item.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
 
-        let columns = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 1
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let columns = isPad ? 2 : 1
+        let cellHeight: CGFloat = isPad ? 280 : 200
         let group = NSCollectionLayoutGroup.horizontal(
-            layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1.0), heightDimension: .absolute(200)),
+            layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1.0), heightDimension: .absolute(cellHeight)),
             repeatingSubitem: item,
             count: columns
         )
@@ -281,7 +282,7 @@ final class MyRoomsViewController: UIViewController {
         NSLayoutConstraint.activate([
             loadingOverlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             loadingOverlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            loadingOverlay.widthAnchor.constraint(equalToConstant: 220),
+            loadingOverlay.widthAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .pad ? 260 : 220),
             loadingOverlay.heightAnchor.constraint(equalToConstant: 120),
             activityIndicator.topAnchor.constraint(equalTo: loadingOverlay.contentView.topAnchor, constant: 18),
             activityIndicator.centerXAnchor.constraint(equalTo: loadingOverlay.contentView.centerXAnchor),

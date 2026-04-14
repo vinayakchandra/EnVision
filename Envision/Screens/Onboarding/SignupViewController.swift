@@ -68,11 +68,11 @@ final class SignupViewController: UIViewController {
         return lbl
     }()
 
-    private let appleButton = SocialButton(
-        title: "Sign up with Apple",
-        image: UIImage(systemName: "apple.logo"),
-        iconTintColor: .black
-    )
+    private let appleButtonContainer: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
 
     private let googleButton = SocialButton(
         title: "Sign in with Google",
@@ -88,6 +88,7 @@ final class SignupViewController: UIViewController {
         setupScrollView()
         setupUI()
         setupActions()
+        refreshAppleButtonStyle()
     }
 
     // MARK: - Scroll View
@@ -122,20 +123,19 @@ final class SignupViewController: UIViewController {
             nameField, emailField, passwordField, confirmField,
             errorLabel, createButton,
             orLabel, continueLabel,
-            appleButton, googleButton
+            appleButtonContainer, googleButton
         ].forEach { contentView.addSubview($0) }
 
         NSLayoutConstraint.activate([
                                         logoImageView.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 40),
                                         logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-                                        logoImageView.heightAnchor.constraint(equalToConstant: 110),
+                                        logoImageView.heightAnchor.constraint(equalToConstant: 160),
 
                                         titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 10),
                                         titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
                                         nameField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 30),
-                                        nameField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 30),
-                                        nameField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -30),
+                                        nameField.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
                                         emailField.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 14),
                                         emailField.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
@@ -164,23 +164,27 @@ final class SignupViewController: UIViewController {
                                         continueLabel.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 4),
                                         continueLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-                                        appleButton.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
-                                        appleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
-                                        appleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
-                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
+                                        appleButtonContainer.topAnchor.constraint(equalTo: continueLabel.bottomAnchor, constant: 28),
+                                        appleButtonContainer.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
+                                        appleButtonContainer.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
+                                        appleButtonContainer.heightAnchor.constraint(equalToConstant: 50),
 
-                                        googleButton.topAnchor.constraint(equalTo: appleButton.bottomAnchor, constant: 14),
+                                        googleButton.topAnchor.constraint(equalTo: appleButtonContainer.bottomAnchor, constant: 14),
                                         googleButton.leadingAnchor.constraint(equalTo: nameField.leadingAnchor),
                                         googleButton.trailingAnchor.constraint(equalTo: nameField.trailingAnchor),
                                         googleButton.heightAnchor.constraint(equalToConstant: 50),
                                         googleButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -50)
                                     ])
+
+        let preferredWidth = nameField.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -60)
+        preferredWidth.priority = .defaultHigh
+        preferredWidth.isActive = true
+        nameField.widthAnchor.constraint(lessThanOrEqualToConstant: 460).isActive = true
     }
 
     // MARK: - Actions
     private func setupActions() {
         createButton.addTarget(self, action: #selector(handleSignup), for: .touchUpInside)
-        appleButton.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
         googleButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
 
@@ -252,7 +256,7 @@ final class SignupViewController: UIViewController {
         authDebug("Apple button tapped.")
         HapticsManager.shared.impactLight()
         errorLabel.alpha = 0
-        appleButton.isEnabled = false
+        appleButtonContainer.isUserInteractionEnabled = false
 
         let nonce = AuthManager.shared.randomNonceString()
         currentAppleNonce = nonce
@@ -267,6 +271,29 @@ final class SignupViewController: UIViewController {
         authorizationController.presentationContextProvider = self
         authorizationController.performRequests()
         authDebug("Apple authorization request started.")
+    }
+
+    private func refreshAppleButtonStyle() {
+        appleButtonContainer.subviews.forEach { $0.removeFromSuperview() }
+        let style: ASAuthorizationAppleIDButton.Style = traitCollection.userInterfaceStyle == .dark ? .white : .black
+        let btn = ASAuthorizationAppleIDButton(type: .signUp, style: style)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.cornerRadius = 25
+        btn.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
+        appleButtonContainer.addSubview(btn)
+        NSLayoutConstraint.activate([
+            btn.topAnchor.constraint(equalTo: appleButtonContainer.topAnchor),
+            btn.leadingAnchor.constraint(equalTo: appleButtonContainer.leadingAnchor),
+            btn.trailingAnchor.constraint(equalTo: appleButtonContainer.trailingAnchor),
+            btn.bottomAnchor.constraint(equalTo: appleButtonContainer.bottomAnchor),
+        ])
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            refreshAppleButtonStyle()
+        }
     }
 
     private func showError(_ msg: String) {
@@ -304,7 +331,7 @@ final class SignupViewController: UIViewController {
 
 extension SignupViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        defer { appleButton.isEnabled = true }
+        defer { appleButtonContainer.isUserInteractionEnabled = true }
         authDebug("Apple authorization completed.")
 
         guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
@@ -352,7 +379,7 @@ extension SignupViewController: ASAuthorizationControllerDelegate, ASAuthorizati
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        appleButton.isEnabled = true
+        appleButtonContainer.isUserInteractionEnabled = true
         let nsError = error as NSError
         authDebug("Apple authorization failed before Firebase. domain=\(nsError.domain) code=\(nsError.code) message=\(error.localizedDescription)")
         showError(error.localizedDescription)

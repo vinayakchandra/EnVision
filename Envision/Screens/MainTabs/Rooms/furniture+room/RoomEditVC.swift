@@ -167,7 +167,7 @@ final class RoomEditVC: UIViewController {
         NSLayoutConstraint.activate([
             overlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             overlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            overlay.widthAnchor.constraint(equalToConstant: 220),
+            overlay.widthAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .pad ? 260 : 220),
             overlay.heightAnchor.constraint(equalToConstant: 120),
 
             indicator.topAnchor.constraint(equalTo: overlay.contentView.topAnchor, constant: 18),
@@ -1263,7 +1263,11 @@ final class RoomEditVC: UIViewController {
         // Wrap in navigation controller to add custom buttons
         let navController = UINavigationController(rootViewController: picker)
         navController.modalPresentationStyle = .pageSheet
-        
+        if let sheet = navController.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+
         // Add native Cancel button (left side)
         let cancelButton = UIBarButtonItem(
             barButtonSystemItem: .cancel,
@@ -1271,7 +1275,7 @@ final class RoomEditVC: UIViewController {
             action: #selector(cancelColorPicker)
         )
         picker.navigationItem.leftBarButtonItem = cancelButton
-        
+
         // Add native Done button (right side)
         let doneButton = UIBarButtonItem(
             title: "Done",
@@ -1281,10 +1285,10 @@ final class RoomEditVC: UIViewController {
         )
         picker.navigationItem.rightBarButtonItem = doneButton
         picker.navigationItem.title = "Choose Color"
-        
+
         present(navController, animated: true)
     }
-    
+
     @objc private func cancelColorPicker() {
         // Restore original materials when cancelling
         if let model = displayedModel {
@@ -1411,11 +1415,15 @@ final class RoomEditVC: UIViewController {
         let picker = UIColorPickerViewController()
         picker.delegate = self
         picker.supportsAlpha = true
-        
+
         // Wrap in navigation controller to add custom buttons
         let navController = UINavigationController(rootViewController: picker)
         navController.modalPresentationStyle = .pageSheet
-        
+        if let sheet = navController.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+
         // Add native Cancel button (left side)
         let cancelButton = UIBarButtonItem(
             barButtonSystemItem: .cancel,
@@ -1423,7 +1431,7 @@ final class RoomEditVC: UIViewController {
             action: #selector(cancelColorPicker)
         )
         picker.navigationItem.leftBarButtonItem = cancelButton
-        
+
         // Add native Done button (right side)
         let doneButton = UIBarButtonItem(
             title: "Done",
@@ -1433,7 +1441,7 @@ final class RoomEditVC: UIViewController {
         )
         picker.navigationItem.rightBarButtonItem = doneButton
         picker.navigationItem.title = "Choose Color"
-        
+
         present(navController, animated: true)
     }
 }

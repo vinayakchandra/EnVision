@@ -129,7 +129,7 @@ final class FurniturePicker: UIViewController {
         NSLayoutConstraint.activate([
             loadingOverlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             loadingOverlay.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            loadingOverlay.widthAnchor.constraint(equalToConstant: 220),
+            loadingOverlay.widthAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .pad ? 260 : 220),
             loadingOverlay.heightAnchor.constraint(equalToConstant: 120),
 
             activityIndicator.topAnchor.constraint(equalTo: loadingOverlay.contentView.topAnchor, constant: 18),
