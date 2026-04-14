@@ -59,6 +59,7 @@ enum AuthManagerError: LocalizedError {
 
 final class AuthManager {
     static let shared = AuthManager()
+    private let hasSeenOnboardingKey = "hasSeenAppOnboarding"
 
     private init() {}
 
@@ -223,6 +224,7 @@ final class AuthManager {
 
     func signOut() throws {
         try Auth.auth().signOut()
+        UserDefaults.standard.set(false, forKey: hasSeenOnboardingKey)
         UserManager.shared.logout()
     }
 
@@ -249,6 +251,7 @@ final class AuthManager {
             }
 
             self.authDebug("Account deleted successfully.")
+            UserDefaults.standard.set(false, forKey: self.hasSeenOnboardingKey)
             UserManager.shared.logout()
             completion(.success(()))
         }
