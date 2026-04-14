@@ -10,6 +10,7 @@ import UIKit
 import FirebaseAuth
 
 class SplashViewController: UIViewController {
+    private let hasSeenOnboardingKey = "hasSeenAppOnboarding"
 
     // MARK: - UI Components
 
@@ -80,12 +81,20 @@ class SplashViewController: UIViewController {
     }
     private func goNext() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            let hasSeenOnboarding = UserDefaults.standard.bool(forKey: self.hasSeenOnboardingKey)
+
+            // Always show onboarding at least once on fresh install.
+            if !hasSeenOnboarding {
+                self.showOnboarding()
+                return
+            }
+
             // Keep authenticated users signed in across app relaunches.
             if Auth.auth().currentUser != nil {
                 self.showMainApp()
                 return
             }
-            self.showOnboarding()
+            self.showLogin()
         }
     }
 
@@ -141,5 +150,12 @@ class SplashViewController: UIViewController {
             tabVC.modalPresentationStyle = .fullScreen
             present(tabVC, animated: true)
         }
+    }
+
+    private func showLogin() {
+        let nav = UINavigationController(rootViewController: LoginViewController())
+        nav.modalPresentationStyle = .fullScreen
+        nav.modalTransitionStyle = .crossDissolve
+        present(nav, animated: true)
     }
 }
