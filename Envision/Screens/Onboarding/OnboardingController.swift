@@ -13,19 +13,19 @@ final class OnboardingController: UIViewController {
         OnboardingPage(
             title: "Scan Your Room",
             subtitle: "Turn any space into a 3D model using your iPhone's LiDAR sensor.",
-            lottieName: "onboarding_scan_room",
+            assetImage: "roomScan",
             fallbackSystemImage: "cube.transparent.fill"
         ),
         OnboardingPage(
             title: "Capture Furniture",
             subtitle: "Walk around any object and let Object Capture build a 3D model.",
-            lottieName: "onboarding_capture_furniture",
+            assetImage: "furnitureScan",
             fallbackSystemImage: "camera.viewfinder"
         ),
         OnboardingPage(
             title: "Visualize with AR",
             subtitle: "Place furniture in your room and see exactly how it fits — before you buy.",
-            lottieName: "onboarding_visualize_ar",
+            assetImage: "visualizeRoom",
             fallbackSystemImage: "arkit"
         ),
     ]

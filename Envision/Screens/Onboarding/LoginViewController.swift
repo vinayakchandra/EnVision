@@ -146,16 +146,16 @@ final class LoginViewController: UIViewController {
                                         continueButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
                                         continueButton.heightAnchor.constraint(equalToConstant: 54),
 
-                                        forgotPasswordButton.topAnchor.constraint(equalTo: continueButton.bottomAnchor, constant: 18),
-                                        forgotPasswordButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
+                                        createAccountButton.topAnchor.constraint(equalTo: continueButton.bottomAnchor, constant: 18),
+                                        createAccountButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
 
-                                        createAccountButton.centerYAnchor.constraint(equalTo: forgotPasswordButton.centerYAnchor),
-                                        createAccountButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
+                                        forgotPasswordButton.centerYAnchor.constraint(equalTo: createAccountButton.centerYAnchor),
+                                        forgotPasswordButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
 
-                                        appleButtonContainer.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 28),
-                                        appleButtonContainer.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
-                                        appleButtonContainer.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-                                        appleButtonContainer.heightAnchor.constraint(equalToConstant: 50),
+                                        appleButton.topAnchor.constraint(equalTo: createAccountButton.bottomAnchor, constant: 28),
+                                        appleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
+                                        appleButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
+                                        appleButton.heightAnchor.constraint(equalToConstant: 50),
 
                                         googleButton.topAnchor.constraint(equalTo: appleButtonContainer.bottomAnchor, constant: 14),
                                         googleButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
