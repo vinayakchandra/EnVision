@@ -17,6 +17,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         FirebaseApp.configure()
         HapticsManager.shared.prepare()
+        BundledModelSeeder.shared.seedIfNeeded()
         return true
     }
 

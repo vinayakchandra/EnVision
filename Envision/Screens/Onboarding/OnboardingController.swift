@@ -6,6 +6,7 @@
 import UIKit
 
 final class OnboardingController: UIViewController {
+    private let hasSeenOnboardingKey = "hasSeenAppOnboarding"
 
     // MARK: - Pages
 
@@ -193,6 +194,7 @@ final class OnboardingController: UIViewController {
     }
 
     private func goToLogin() {
+        UserDefaults.standard.set(true, forKey: hasSeenOnboardingKey)
         let nav = UINavigationController(rootViewController: LoginViewController())
         nav.modalPresentationStyle = .fullScreen
         nav.modalTransitionStyle = .crossDissolve
