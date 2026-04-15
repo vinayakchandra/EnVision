@@ -8,6 +8,12 @@ import UIKit
 class AppInfoViewController: UIViewController {
     
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let appStoreURL = URL(string: "https://apps.apple.com/us/app/envision-imagine-see-buy/id6761647280")
+    
+    private let feedbackActions = [
+        "Rate This App",
+        "View in App Store"
+    ]
     
     private let appInfo: [(title: String, value: String)] = {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -95,7 +101,7 @@ extension AppInfoViewController: UITableViewDelegate, UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return section == 0 ? appInfo.count : 1
+        return section == 0 ? appInfo.count : feedbackActions.count
     }
     
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
@@ -118,7 +124,7 @@ extension AppInfoViewController: UITableViewDelegate, UITableViewDataSource {
             cell.accessoryView = valueLabel
             valueLabel.sizeToFit()
         } else {
-            cell.textLabel?.text = "Rate This App"
+            cell.textLabel?.text = feedbackActions[indexPath.row]
             cell.textLabel?.textColor = AppColors.accent
             cell.accessoryView = nil
             cell.selectionStyle = .default
@@ -130,12 +136,17 @@ extension AppInfoViewController: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         
-        if indexPath.section == 1 {
-            // Open App Store for rating
-            // Replace with your actual App Store ID
-            if let url = URL(string: "itms-apps://itunes.apple.com/app/idYOUR_APP_ID?action=write-review") {
-                UIApplication.shared.open(url)
+        guard indexPath.section == 1 else { return }
+        
+        if indexPath.row == 0 {
+            if let reviewURL = URL(string: "itms-apps://itunes.apple.com/app/id6761647280?action=write-review") {
+                UIApplication.shared.open(reviewURL)
             }
+            return
+        }
+        
+        if let appStoreURL {
+            UIApplication.shared.open(appStoreURL)
         }
     }
 }
