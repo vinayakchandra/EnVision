@@ -1,5 +1,6 @@
 import UIKit
 import RealityKit
+import QuickLook
 
 final class RoomVisualizeVC: UIViewController {
 
@@ -14,6 +15,7 @@ final class RoomVisualizeVC: UIViewController {
     private var measurementPoints: [SIMD3<Float>] = []
     private var measurementLabel: UILabel?
     private var measurementLine: ModelEntity?
+    private var previewURL: URL?
     
     // MARK: - Measurement State
     private let measurementManager = MeasurementManager.shared
@@ -55,6 +57,8 @@ final class RoomVisualizeVC: UIViewController {
     private var loadingOverlay: UIVisualEffectView?
     private var loadingIndicator: UIActivityIndicatorView?
     private var loadingLabel: UILabel?
+    private var rightDockContainer: UIView?
+    private var measureDockButton: UIButton?
     
     private var measurementTextColor: UIColor {
         traitCollection.userInterfaceStyle == .dark ? .white : .black
@@ -162,25 +166,6 @@ final class RoomVisualizeVC: UIViewController {
 
     // MARK: - Navigation
     private func setupNavigation() {
-        // Ruler button (leftmost) - for measurements
-        let rulerButton = UIBarButtonItem(
-            image: UIImage(systemName: "ruler"),
-            style: .plain,
-            target: self,
-            action: #selector(rulerTapped)
-        )
-        rulerButton.tintColor = .systemBlue
-        
-        // Share button (middle) - for export
-        let shareButton = UIBarButtonItem(
-            image: UIImage(systemName: "square.and.arrow.up"),
-            style: .plain,
-            target: self,
-            action: #selector(shareTapped)
-        )
-        shareButton.tintColor = .systemBlue
-        
-        // Add furniture button (rightmost)
         let addButton = UIBarButtonItem(
             image: UIImage(systemName: "plus"),
             style: .plain,
@@ -188,9 +173,65 @@ final class RoomVisualizeVC: UIViewController {
             action: #selector(addFurnitureTapped)
         )
         addButton.tintColor = .systemGreen
-        
-        // Order: rightmost first in array
-        navigationItem.rightBarButtonItems = [addButton, shareButton, rulerButton]
+        navigationItem.rightBarButtonItem = addButton
+        setupRightDock()
+    }
+
+    private func setupRightDock() {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.backgroundColor = UIColor.black.withAlphaComponent(0.68)
+        container.layer.cornerRadius = 24
+        container.layer.cornerCurve = .continuous
+        container.layer.shadowColor = UIColor.black.cgColor
+        container.layer.shadowOpacity = 0.22
+        container.layer.shadowRadius = 10
+        container.layer.shadowOffset = CGSize(width: 0, height: 4)
+
+        let stack = UIStackView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.alignment = .fill
+        stack.distribution = .fillEqually
+        stack.spacing = 8
+        container.addSubview(stack)
+
+        let arButton = makeDockButton(systemImage: "arkit", action: #selector(viewInARTapped))
+        let exportButton = makeDockButton(systemImage: "square.and.arrow.up", action: #selector(shareTapped))
+        let measureButton = makeDockButton(systemImage: "ruler", action: #selector(rulerTapped))
+        measureDockButton = measureButton
+
+        [arButton, exportButton, measureButton].forEach { stack.addArrangedSubview($0) }
+
+        view.addSubview(container)
+
+        NSLayoutConstraint.activate([
+            container.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            container.topAnchor.constraint(equalTo: view.topAnchor, constant: 112),
+            container.widthAnchor.constraint(equalToConstant: 56),
+
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+        ])
+
+        rightDockContainer = container
+    }
+
+    private func makeDockButton(systemImage: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setImage(UIImage(systemName: systemImage), for: .normal)
+        button.tintColor = .white
+        button.backgroundColor = UIColor.white.withAlphaComponent(0.12)
+        button.layer.cornerRadius = 16
+        button.layer.cornerCurve = .continuous
+        button.addTarget(self, action: action, for: .touchUpInside)
+        NSLayoutConstraint.activate([
+            button.heightAnchor.constraint(equalToConstant: 40),
+        ])
+        return button
     }
     
     // MARK: - Share Action
@@ -213,7 +254,7 @@ final class RoomVisualizeVC: UIViewController {
         
         // For iPad support
         if let popover = alert.popoverPresentationController {
-            popover.barButtonItem = navigationItem.rightBarButtonItems?[1]
+            anchorDockPopover(popover)
         }
         
         present(alert, animated: true)
@@ -229,7 +270,7 @@ final class RoomVisualizeVC: UIViewController {
             DispatchQueue.main.async {
                 let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
                 if let popover = activityVC.popoverPresentationController {
-                    popover.barButtonItem = self.navigationItem.rightBarButtonItems?[1]
+                    self.anchorDockPopover(popover)
                 }
                 self.present(activityVC, animated: true)
             }
@@ -271,7 +312,7 @@ final class RoomVisualizeVC: UIViewController {
                         guard let self = self else { return }
                         let activityVC = UIActivityViewController(activityItems: [exportURL], applicationActivities: nil)
                         if let popover = activityVC.popoverPresentationController {
-                            popover.barButtonItem = self.navigationItem.rightBarButtonItems?[1]
+                            self.anchorDockPopover(popover)
                         }
                         self.present(activityVC, animated: true)
                     }
@@ -323,7 +364,7 @@ final class RoomVisualizeVC: UIViewController {
         
         // For iPad support
         if let popover = alert.popoverPresentationController {
-            popover.barButtonItem = navigationItem.rightBarButtonItems?.last
+            anchorDockPopover(popover)
         }
         
         present(alert, animated: true)
@@ -410,9 +451,32 @@ final class RoomVisualizeVC: UIViewController {
     }
     
     private func updateRulerButtonAppearance(active: Bool) {
-        if let rulerButton = navigationItem.rightBarButtonItems?.last {
-            rulerButton.tintColor = active ? .systemOrange : .systemBlue
-            rulerButton.image = UIImage(systemName: active ? "ruler.fill" : "ruler")
+        measureDockButton?.tintColor = active ? .systemOrange : .white
+        measureDockButton?.backgroundColor = active ? UIColor.systemOrange.withAlphaComponent(0.22) : UIColor.white.withAlphaComponent(0.12)
+    }
+
+    @objc private func viewInARTapped() {
+        let url = roomURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            showExportError("Room file not found for AR preview.")
+            return
+        }
+
+        previewURL = url
+        let preview = QLPreviewController()
+        preview.dataSource = self
+        present(preview, animated: true)
+    }
+
+    private func anchorDockPopover(_ popover: UIPopoverPresentationController) {
+        if let dock = rightDockContainer {
+            popover.sourceView = dock
+            popover.sourceRect = dock.bounds
+            popover.permittedArrowDirections = [.right, .left, .up, .down]
+        } else {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+            popover.permittedArrowDirections = []
         }
     }
     
@@ -1209,5 +1273,13 @@ final class RoomVisualizeVC: UIViewController {
                                         panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
                                         panel.heightAnchor.constraint(equalToConstant: 170),
                                     ])
+    }
+}
+
+extension RoomVisualizeVC: QLPreviewControllerDataSource {
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { previewURL == nil ? 0 : 1 }
+
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        previewURL! as QLPreviewItem
     }
 }
