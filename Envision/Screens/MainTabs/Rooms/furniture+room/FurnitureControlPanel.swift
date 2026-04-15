@@ -13,8 +13,6 @@ final class FurnitureControlPanel: UIView {
     private var joystickBase = UIView()
     private var joystickKnob = UIView()
 
-    private var heightLabel = UILabel()
-    private var rotationLabel = UILabel()
     private var heightSlider = UISlider()
     private var rotationSlider = UISlider()
 
@@ -23,36 +21,40 @@ final class FurnitureControlPanel: UIView {
     private var currentRotation: Float = 0
 
     // MARK: - Theme
+    private var isDarkAppearance: Bool {
+        traitCollection.userInterfaceStyle == .dark
+    }
+
     private var controlBaseColor: UIColor {
-        UIColor.white
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.14) : UIColor.white
     }
 
     private var knobColor: UIColor {
-        UIColor.white
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.88) : UIColor.white
     }
 
     private var iconColor: UIColor {
-        UIColor.black.withAlphaComponent(0.55)
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.90) : UIColor.black.withAlphaComponent(0.55)
     }
 
     private var labelColor: UIColor {
-        UIColor.black.withAlphaComponent(0.40)
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.78) : UIColor.black.withAlphaComponent(0.40)
     }
 
     private var sliderMinColor: UIColor {
-        UIColor.black.withAlphaComponent(0.46)
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.70) : UIColor.black.withAlphaComponent(0.46)
     }
 
     private var sliderMaxColor: UIColor {
-        UIColor.black.withAlphaComponent(0.18)
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.22) : UIColor.black.withAlphaComponent(0.18)
     }
 
     private var sliderThumbColor: UIColor {
-        UIColor.white
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.95) : UIColor.white
     }
 
     private var controlBorderColor: UIColor {
-        UIColor.black.withAlphaComponent(0.16)
+        isDarkAppearance ? UIColor.white.withAlphaComponent(0.24) : UIColor.black.withAlphaComponent(0.16)
     }
 
     private var panelBackgroundColor: UIColor {
@@ -91,6 +93,14 @@ final class FurnitureControlPanel: UIView {
         applyTheme()
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard let previousTraitCollection else { return }
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            applyTheme()
+        }
+    }
+
     private func applyTheme() {
         backgroundColor = panelBackgroundColor
 
@@ -100,17 +110,14 @@ final class FurnitureControlPanel: UIView {
         joystickKnob.layer.borderColor = controlBorderColor.cgColor
 
         joystickBase.layer.shadowColor = UIColor.black.cgColor
-        joystickBase.layer.shadowOpacity = 0.20
+        joystickBase.layer.shadowOpacity = isDarkAppearance ? 0.35 : 0.20
         joystickBase.layer.shadowRadius = 10
         joystickBase.layer.shadowOffset = CGSize(width: 0, height: 3)
 
         joystickKnob.layer.shadowColor = UIColor.black.cgColor
-        joystickKnob.layer.shadowOpacity = 0.18
+        joystickKnob.layer.shadowOpacity = isDarkAppearance ? 0.30 : 0.18
         joystickKnob.layer.shadowRadius = 6
         joystickKnob.layer.shadowOffset = CGSize(width: 0, height: 3)
-
-        heightLabel.textColor = labelColor
-        rotationLabel.textColor = labelColor
 
         heightSlider.minimumTrackTintColor = sliderMinColor
         heightSlider.maximumTrackTintColor = sliderMaxColor
@@ -120,15 +127,21 @@ final class FurnitureControlPanel: UIView {
         rotationSlider.maximumTrackTintColor = sliderMaxColor
         rotationSlider.thumbTintColor = sliderThumbColor
 
-        for case let button as UIButton in subviews {
-            guard button.currentImage != nil else { continue }
-            button.tintColor = iconColor
-            button.backgroundColor = controlBaseColor
-            button.layer.borderColor = controlBorderColor.cgColor
-            button.layer.shadowColor = UIColor.black.cgColor
-            button.layer.shadowOpacity = 0.16
-            button.layer.shadowRadius = 8
-            button.layer.shadowOffset = CGSize(width: 0, height: 3)
+        applyButtonThemeRecursively(in: self)
+    }
+
+    private func applyButtonThemeRecursively(in view: UIView) {
+        for subview in view.subviews {
+            if let button = subview as? UIButton, button.currentImage != nil {
+                button.tintColor = iconColor
+                button.backgroundColor = controlBaseColor
+                button.layer.borderColor = controlBorderColor.cgColor
+                button.layer.shadowColor = UIColor.black.cgColor
+                button.layer.shadowOpacity = isDarkAppearance ? 0.28 : 0.16
+                button.layer.shadowRadius = 8
+                button.layer.shadowOffset = CGSize(width: 0, height: 3)
+            }
+            applyButtonThemeRecursively(in: subview)
         }
     }
 
@@ -206,19 +219,12 @@ final class FurnitureControlPanel: UIView {
     // ---------------------------------------------------------
 
     private func setupHeightSlider() {
-        heightLabel = makeSliderLabel(text: "Height")
-        addSubview(heightLabel)
-
         heightSlider = makeSlider()
         heightSlider.addTarget(self, action: #selector(heightChanged(_:)), for: .valueChanged)
         addSubview(heightSlider)
 
         NSLayoutConstraint.activate([
-            heightLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            heightLabel.centerYAnchor.constraint(equalTo: heightSlider.centerYAnchor),
-            heightLabel.widthAnchor.constraint(equalToConstant: 46),
-
-            heightSlider.leadingAnchor.constraint(equalTo: heightLabel.trailingAnchor, constant: 8),
+            heightSlider.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             heightSlider.trailingAnchor.constraint(equalTo: joystickBase.leadingAnchor, constant: -30),
             heightSlider.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 12)
         ])
@@ -237,19 +243,12 @@ final class FurnitureControlPanel: UIView {
 
 
     private func setupRotationSlider() {
-        rotationLabel = makeSliderLabel(text: "Rotation")
-        addSubview(rotationLabel)
-
         rotationSlider = makeSlider()
         rotationSlider.addTarget(self, action: #selector(rotationChanged(_:)), for: .valueChanged)
         addSubview(rotationSlider)
 
         NSLayoutConstraint.activate([
-            rotationLabel.leadingAnchor.constraint(equalTo: heightLabel.leadingAnchor),
-            rotationLabel.centerYAnchor.constraint(equalTo: rotationSlider.centerYAnchor),
-            rotationLabel.widthAnchor.constraint(equalToConstant: 46),
-
-            rotationSlider.leadingAnchor.constraint(equalTo: rotationLabel.trailingAnchor, constant: 8),
+            rotationSlider.leadingAnchor.constraint(equalTo: heightSlider.leadingAnchor),
             rotationSlider.trailingAnchor.constraint(equalTo: heightSlider.trailingAnchor),
             rotationSlider.topAnchor.constraint(equalTo: heightSlider.bottomAnchor, constant: 14)
         ])
@@ -264,16 +263,6 @@ final class FurnitureControlPanel: UIView {
         entity.orientation = simd_quatf(angle: currentRotation, axis: [0, 1, 0])
 
         resetSliderIfReleased(sender)
-    }
-
-
-    private func makeSliderLabel(text: String) -> UILabel {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = text
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = labelColor
-        return label
     }
 
     private func makeSlider() -> UISlider {

@@ -7,6 +7,10 @@ final class OrbitJoystick: UIView {
 
     // MARK: - UI
     private let knob = UIView()
+    
+    private var isDarkAppearance: Bool {
+        traitCollection.userInterfaceStyle == .dark
+    }
 
     // MARK: - Layout Constants
     private var knobRadius: CGFloat { bounds.width * 0.25 }
@@ -24,14 +28,20 @@ final class OrbitJoystick: UIView {
 
     // MARK: - Setup
     private func setup() {
-        backgroundColor = UIColor.black.withAlphaComponent(0.3)
         clipsToBounds = true
-
-        knob.backgroundColor = UIColor.white.withAlphaComponent(0.9)
         addSubview(knob)
+        applyTheme()
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
         addGestureRecognizer(pan)
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard let previousTraitCollection else { return }
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            applyTheme()
+        }
     }
 
     override func layoutSubviews() {
@@ -45,6 +55,19 @@ final class OrbitJoystick: UIView {
         )
         knob.layer.cornerRadius = knobRadius
         knob.center = centerPoint
+    }
+
+    private func applyTheme() {
+        backgroundColor = isDarkAppearance
+            ? UIColor.white.withAlphaComponent(0.14)
+            : UIColor.black.withAlphaComponent(0.30)
+        knob.backgroundColor = isDarkAppearance
+            ? UIColor.white.withAlphaComponent(0.90)
+            : UIColor.white.withAlphaComponent(0.90)
+        layer.borderWidth = 1
+        layer.borderColor = isDarkAppearance
+            ? UIColor.white.withAlphaComponent(0.22).cgColor
+            : UIColor.black.withAlphaComponent(0.15).cgColor
     }
 
     private var centerPoint: CGPoint {

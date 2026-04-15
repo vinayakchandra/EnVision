@@ -50,9 +50,9 @@ class ProfileViewController: UIViewController {
             // ("key.fill", "Security", false),
         ],
         .about: [
+            ("info.circle.fill", "App Info", false),
             ("lightbulb.fill", "Tips & Tutorials", false),
             ("arrow.counterclockwise", "Restart App Tour", false),
-            ("info.circle.fill", "App Info", false),
             ("doc.text.fill", "Terms of Service", false),
             ("shield.lefthalf.filled", "Privacy Policy", false),
         ],
