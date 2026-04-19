@@ -1,7 +1,7 @@
 # EnVision - Room & Furniture 3D Scanner
 
 <p align="center">
-  <img src="Envision/Assets.xcassets/envision.imageset/envision.png" alt="EnVision Logo" width="120"/>
+  <img src="Envision/Assets.xcassets/envision.imageset/envision-background.png" alt="EnVision Logo" width="120"/>
 </p>
 
 <p align="center">
